@@ -1,0 +1,1 @@
+CREATE INDEX "idx_conversations_waba_campaign" ON "conversations" USING btree ("waba_id","campaign_id");

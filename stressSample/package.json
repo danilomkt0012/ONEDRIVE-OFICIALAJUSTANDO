@@ -1,0 +1,9 @@
+{
+  "name": "stresssample",
+  "version": "1.0.0",
+  "private": true,
+  "type": "commonjs",
+  "dependencies": {
+    "axios": "^1.7.0"
+  }
+}

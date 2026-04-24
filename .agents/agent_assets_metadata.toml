@@ -1,0 +1,8 @@
+uploads = []
+generated = []
+
+[[outputs]]
+id = "HnATWO2pc826ekmE566Bc"
+uri = "file://AUDITORIA_WHATSAPP_API_2026.md"
+type = "text"
+title = "Auditoria Completa — Overdrive V3 (WhatsApp Business API 2026)"
