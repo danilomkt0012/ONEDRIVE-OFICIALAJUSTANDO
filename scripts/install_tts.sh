@@ -1,50 +1,41 @@
 #!/usr/bin/env bash
-set -euo pipefail
+set -uo pipefail
 
-PYTORCH_INDEX="https://download.pytorch.org/whl/cpu"
-EXPECTED_TORCH="2.6.0"
-EXPECTED_TORCHAUDIO="2.6.0"
+PIP_TARGET_DIR="${PIP_TARGET_DIR:-$HOME/workspace/.pythonlibs/lib/python3.11/site-packages}"
+PIP_INSTALL=(python3 -m pip install --quiet --target "$PIP_TARGET_DIR" --upgrade --no-deps)
 
 if python3 -c "import soundfile" 2>/dev/null; then
     echo "[install_tts] soundfile already installed — skipping."
 else
     echo "[install_tts] Installing soundfile…"
-    python3 -m pip install --quiet "soundfile>=0.13.0"
+    "${PIP_INSTALL[@]}" "soundfile>=0.13.0" cffi pycparser
 fi
 
 if python3 -c "import TTS" 2>/dev/null; then
     echo "[install_tts] TTS already installed — skipping."
 else
     echo "[install_tts] Installing TTS (Coqui)…"
-    python3 -m pip install --quiet "TTS>=0.22.0"
+    python3 -m pip install --quiet --target "$PIP_TARGET_DIR" --upgrade "TTS>=0.22.0"
 fi
 
 INSTALLED_TORCH=$(python3 -c "import torch; print(torch.__version__.split('+')[0])" 2>/dev/null || echo "")
-if [ "$INSTALLED_TORCH" = "$EXPECTED_TORCH" ]; then
-    echo "[install_tts] torch==$EXPECTED_TORCH already installed — skipping."
+if [ -n "$INSTALLED_TORCH" ]; then
+    echo "[install_tts] torch==$INSTALLED_TORCH already installed — keeping existing version."
 else
-    if [ -n "$INSTALLED_TORCH" ]; then
-        echo "[install_tts] Wrong torch version detected: $INSTALLED_TORCH (expected $EXPECTED_TORCH). Replacing…"
-    else
-        echo "[install_tts] torch not found. Installing…"
-    fi
-    python3 -m pip install --quiet --force-reinstall \
-        --index-url "$PYTORCH_INDEX" \
-        "torch==$EXPECTED_TORCH"
+    echo "[install_tts] torch not found. Installing CPU build…"
+    python3 -m pip install --quiet --target "$PIP_TARGET_DIR" --upgrade \
+        --index-url "https://download.pytorch.org/whl/cpu" \
+        torch torchaudio
 fi
 
 INSTALLED_TORCHAUDIO=$(python3 -c "import torchaudio; print(torchaudio.__version__.split('+')[0])" 2>/dev/null || echo "")
-if [ "$INSTALLED_TORCHAUDIO" = "$EXPECTED_TORCHAUDIO" ]; then
-    echo "[install_tts] torchaudio==$EXPECTED_TORCHAUDIO already installed — skipping."
+if [ -n "$INSTALLED_TORCHAUDIO" ]; then
+    echo "[install_tts] torchaudio==$INSTALLED_TORCHAUDIO already installed — keeping existing version."
 else
-    if [ -n "$INSTALLED_TORCHAUDIO" ]; then
-        echo "[install_tts] Wrong torchaudio version detected: $INSTALLED_TORCHAUDIO (expected $EXPECTED_TORCHAUDIO). Replacing…"
-    else
-        echo "[install_tts] torchaudio not found. Installing…"
-    fi
-    python3 -m pip install --quiet --force-reinstall \
-        --index-url "$PYTORCH_INDEX" \
-        "torchaudio==$EXPECTED_TORCHAUDIO"
+    echo "[install_tts] torchaudio not found. Installing CPU build…"
+    python3 -m pip install --quiet --target "$PIP_TARGET_DIR" --upgrade \
+        --index-url "https://download.pytorch.org/whl/cpu" \
+        torchaudio
 fi
 
 echo "[install_tts] Skipping torchcodec (not compatible with this environment)."
