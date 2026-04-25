@@ -460,16 +460,23 @@ export async function seedAdminUser(): Promise<void> {
   try {
     const hashedPassword = await bcrypt.hash(adminPassword!, 10);
 
+    const [existingByEmail] = await db.select().from(users).where(eq(users.email, adminEmail!)).limit(1);
+    if (existingByEmail) {
+      await db.update(users).set({ role: "admin", status: "approved", updatedAt: new Date() }).where(eq(users.id, existingByEmail.id));
+      console.log(`[AUTH] Admin com email='${adminEmail}' já existe — role/status garantidos (admin/approved)`);
+      return;
+    }
+
     const [existingByUsername] = await db.select().from(users).where(eq(users.username, adminUsername!)).limit(1);
     if (existingByUsername) {
-      await db.update(users).set({ username: adminUsername!, email: adminEmail!, phone: adminPhone!, password: hashedPassword, updatedAt: new Date() }).where(eq(users.id, existingByUsername.id));
+      await db.update(users).set({ username: adminUsername!, email: adminEmail!, phone: adminPhone!, password: hashedPassword, role: "admin", status: "approved", updatedAt: new Date() }).where(eq(users.id, existingByUsername.id));
       console.log(`[AUTH] Admin '${adminUsername}' atualizado (senha, e-mail e username)`);
       return;
     }
 
     const [existingAdmin] = await db.select().from(users).where(eq(users.role, "admin")).limit(1);
     if (existingAdmin) {
-      await db.update(users).set({ username: adminUsername!, email: adminEmail!, phone: adminPhone!, password: hashedPassword, updatedAt: new Date() }).where(eq(users.id, existingAdmin.id));
+      await db.update(users).set({ username: adminUsername!, email: adminEmail!, phone: adminPhone!, password: hashedPassword, role: "admin", status: "approved", updatedAt: new Date() }).where(eq(users.id, existingAdmin.id));
       console.log(`[AUTH] Admin existente atualizado para username='${adminUsername}', email='${adminEmail}'`);
       return;
     }
