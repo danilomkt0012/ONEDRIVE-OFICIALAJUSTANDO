@@ -495,7 +495,7 @@ export default function Step2Integration(props: Step2IntegrationProps) {
                     <AlertCircle className="w-4 h-4 text-red-500 flex-shrink-0 mt-0.5" />
                     <div className="space-y-1">
                       <p className="text-xs text-red-700 font-medium">Erro ao validar WABA:</p>
-                      <p className="text-xs text-red-700">{manualWabaError}</p>
+                      <p className="text-xs text-red-700 whitespace-pre-line">{manualWabaError}</p>
                     </div>
                   </div>
                 )}

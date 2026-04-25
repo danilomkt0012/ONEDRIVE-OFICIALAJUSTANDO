@@ -543,7 +543,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       } catch (primaryError: any) {
         const code = primaryError?.errorCode ?? primaryError?.code;
         const status = primaryError?.httpStatus ?? primaryError?.statusCode;
-        const looksLikePermissionError = code === 100 || status === 400 || status === 403;
+        const msg = primaryError?.message || '';
+        const looksLikePermissionError = code === 100 || status === 400 || status === 403
+          || msg.includes('does not exist') || msg.includes('missing permissions')
+          || msg.includes('Unsupported get request') || msg.includes('Falha ao buscar números');
 
         if (looksLikePermissionError) {
           try {

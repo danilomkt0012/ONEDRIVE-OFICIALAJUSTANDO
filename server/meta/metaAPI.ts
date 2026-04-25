@@ -273,8 +273,11 @@ export class MetaWhatsAppAPI {
       if (errorData.error?.code === 190 || errorMessage.includes('OAuth access token')) {
         throw new Error('OAUTH_ERROR: Token de acesso do WhatsApp Business API expirado ou inválido. Configure um novo token na página de Configurações.');
       }
-      
-      throw new Error(`Falha ao buscar números: ${errorMessage}`);
+
+      const enriched: any = new Error(`Falha ao buscar números: ${errorMessage}`);
+      enriched.errorCode = errorData.error?.code;
+      enriched.httpStatus = error.response?.status;
+      throw enriched;
     }
   }
 

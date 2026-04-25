@@ -421,7 +421,13 @@ export default function CampaignWizardPage() {
       });
       const data = await res.json();
       if (!res.ok) {
-        setManualWabaError(data.error || "Erro ao validar WABA ID");
+        let errorMsg = data.error || "Erro ao validar WABA ID";
+        if (data.details) errorMsg += `\n${data.details}`;
+        if (data.checks && Array.isArray(data.checks)) {
+          errorMsg += "\n" + data.checks.join("\n");
+        }
+        if (data.metaError) errorMsg += `\n\nErro Meta: ${data.metaError}`;
+        setManualWabaError(errorMsg);
         return;
       }
 
