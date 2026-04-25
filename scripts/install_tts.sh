@@ -1,7 +1,14 @@
 #!/usr/bin/env bash
 set -uo pipefail
 
+# Replit sets PIP_USER=1 globally which conflicts with --target. Disable it for this script
+# and force pip to allow installs into the externally-managed system Python.
+export PIP_USER=0
+export PIP_BREAK_SYSTEM_PACKAGES=1
+
 PIP_TARGET_DIR="${PIP_TARGET_DIR:-$HOME/workspace/.pythonlibs/lib/python3.11/site-packages}"
+mkdir -p "$PIP_TARGET_DIR"
+export PYTHONPATH="$PIP_TARGET_DIR:${PYTHONPATH:-}"
 PIP_INSTALL=(python3 -m pip install --quiet --target "$PIP_TARGET_DIR" --upgrade --no-deps)
 
 if python3 -c "import soundfile" 2>/dev/null; then
