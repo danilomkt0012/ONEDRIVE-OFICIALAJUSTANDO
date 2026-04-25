@@ -3,6 +3,7 @@
   "description": "Multi-WABA WhatsApp campaign dispatcher with weighted round-robin scoring.",
   "stack": "heroku-24",
   "buildpacks": [
+    { "url": "heroku-community/apt" },
     { "url": "heroku/nodejs" }
   ],
   "env": {
@@ -13,17 +14,39 @@
       "value": "false",
       "description": "Install devDependencies so the build (vite + esbuild) can run."
     },
+    "TTS_DISABLED": {
+      "value": "true",
+      "description": "TTS microservice (Coqui XTTS v2 + PyTorch) does not fit in Heroku slug limit. Disable to avoid runtime errors."
+    },
     "DATABASE_URL": {
       "description": "PostgreSQL connection string (Heroku Postgres or external)."
     },
     "SESSION_SECRET": {
       "generator": "secret"
+    },
+    "META_APP_SECRET": {
+      "description": "Meta App Secret (Facebook for Developers > App > Settings > Basic)."
+    },
+    "WEBHOOK_VERIFY_TOKEN": {
+      "description": "Verify token used by Meta to confirm webhook ownership (any string)."
+    },
+    "ADMIN_USERNAME": {
+      "description": "Admin username seeded on boot."
+    },
+    "ADMIN_EMAIL": {
+      "description": "Admin email seeded on boot."
+    },
+    "ADMIN_PASSWORD": {
+      "description": "Admin password seeded on boot (will overwrite on every deploy)."
+    },
+    "ADMIN_PHONE": {
+      "description": "Admin phone (E.164 without +, e.g. 5511999998888)."
     }
   },
   "formation": {
     "web": {
       "quantity": 1,
-      "size": "standard-1x"
+      "size": "standard-2x"
     }
   },
   "scripts": {
