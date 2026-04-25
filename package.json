@@ -5,7 +5,7 @@
   "license": "MIT",
   "scripts": {
     "dev": "drizzle-kit push --force && NODE_ENV=development tsx server/index.ts",
-    "build": "vite build && esbuild server/index.ts --platform=node --packages=external --bundle --format=esm --outdir=dist && node -e \"require('fs').writeFileSync('dist/index.cjs', \\\"import('./index.js').catch(e=>{console.error('[FATAL]',e);process.exit(1);});\\\\n\\\")\"",
+    "build": "vite build && esbuild server/index.ts --platform=node --packages=external --bundle --format=esm --outdir=dist && node -e \"require('fs').writeFileSync('dist/index.cjs', \\\"process.env.NODE_ENV = process.env.NODE_ENV || 'production';\\\\nimport('./index.js').catch(e=>{console.error('[FATAL]',e);process.exit(1);});\\\\n\\\")\"",
     "start": "NODE_ENV=production node dist/index.cjs",
     "start:all": "bash scripts/start_tts.sh & NODE_ENV=production node dist/index.cjs",
     "check": "tsc",
