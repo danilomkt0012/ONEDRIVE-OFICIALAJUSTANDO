@@ -65,11 +65,12 @@ async function fetchPhoneQualityFromMeta(
 
 async function pauseCampaignsForNumber(phoneNumberId: string): Promise<void> {
   try {
-    // Fetch ALL running campaigns (not filtered by wabaId) so that campaigns using
-    // this number via a secondary WABA are also caught. Membership is determined
-    // by inspecting selectedNumbers for the specific phoneNumberId.
+    // POLÍTICA NOVA: NUNCA pausa por queda de qualidade.
+    // Em vez disso: marca o número com score reduzido (peso menor na rotação)
+    // mas a campanha continua disparando — outros números absorvem o volume.
+    // Isso é configurável no nível da campanha via dispatchMode.
     const runningCampaigns = await db
-      .select({ id: campaigns.id, selectedNumbers: campaigns.selectedNumbers })
+      .select({ id: campaigns.id, selectedNumbers: campaigns.selectedNumbers, dispatchMode: campaigns.dispatchMode })
       .from(campaigns)
       .where(eq(campaigns.status, 'running'));
 
@@ -78,15 +79,20 @@ async function pauseCampaignsForNumber(phoneNumberId: string): Promise<void> {
       const usesThisNumber = selectedNumbers.some(
         (n) => n.phoneNumberId === phoneNumberId || n.id === phoneNumberId
       );
-      if (usesThisNumber) {
-        await db
-          .update(campaigns)
-          .set({ status: 'paused', updatedAt: new Date() })
-          .where(eq(campaigns.id, campaign.id));
-        console.log(`[QualityPoller] Campanha ${campaign.id} pausada (DB) — número ${phoneNumberId} ficou RED`);
-        // Also pause any active in-memory engine for this campaign
-        await pauseEngineForCampaign(campaign.id);
-      }
+      if (!usesThisNumber) continue;
+
+      const mode = (campaign.dispatchMode || 'equilibrado').toLowerCase();
+      // Em qualquer modo (seguro/equilibrado/turbo) NÃO pausamos por RED.
+      // Aplicamos penalidade no AdaptiveScoring que já reduz o peso na rotação.
+      try {
+        const { recalcScore } = await import('../services/engine/AdaptiveScoring');
+        await recalcScore(
+          phoneNumberId,
+          { sentDelta: 0, deliveredDelta: 0, readDelta: 0, repliedDelta: 0, errors131049Delta: 0, errorsOtherDelta: 0, qualityRating: 'RED', previousQuality: 'YELLOW' },
+          'quality_dropped_red'
+        );
+      } catch {/* silent */}
+      console.log(`[QualityPoller] Campanha ${campaign.id} mantida ATIVA (modo ${mode}) — número ${phoneNumberId} ficou RED, peso reduzido automaticamente`);
     }
   } catch (err: unknown) {
     logError('qualityPoller.pauseCampaigns', { phoneNumberId }, err instanceof Error ? err : new Error(String(err)));

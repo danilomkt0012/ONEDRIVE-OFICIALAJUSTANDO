@@ -180,6 +180,7 @@ export function registerCampaignRoutes(app: Express): void {
       const schema = z.object({
         name: z.string().min(1),
         description: z.string().optional(),
+        dispatchMode: z.enum(['seguro', 'equilibrado', 'turbo']).optional(),
       });
       const data = schema.parse(req.body);
 
@@ -187,6 +188,7 @@ export function registerCampaignRoutes(app: Express): void {
         userId: req.session.userId!,
         name: data.name,
         description: data.description || null,
+        dispatchMode: data.dispatchMode || 'equilibrado',
         status: "draft",
         totalLeads: 0,
       }).returning();
@@ -198,6 +200,111 @@ export function registerCampaignRoutes(app: Express): void {
         return res.status(400).json({ error: "Dados inválidos", details: error.errors });
       }
       logError("campaignRoutes.createDraftCampaign", {}, error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // ============================================================================
+  // DISPATCH MODE — perfis, ETA preview, saúde dos números
+  // ============================================================================
+  app.get("/api/dispatch/profiles", async (_req, res) => {
+    try {
+      const { DISPATCH_PROFILES } = await import('./services/engine/DispatchProfile');
+      res.json({
+        profiles: Object.values(DISPATCH_PROFILES).map(p => ({
+          mode: p.mode,
+          label: p.label,
+          description: p.description,
+          refillRatePerNumber: p.refillRatePerNumber,
+          maxConcurrentPerNumber: p.maxConcurrentPerNumber,
+          autoPauseOnRedRating: p.autoPauseOnRedRating,
+          maxMessagesPerRecipient24h: p.maxMessagesPerRecipient24h,
+        })),
+      });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.get("/api/dispatch/eta", async (req, res) => {
+    try {
+      const totalLeads = parseInt(req.query.totalLeads as string) || 2000;
+      const numberCount = parseInt(req.query.numberCount as string) || 5;
+      const mode = (req.query.mode as string) || 'equilibrado';
+
+      const { estimateEtaMinutes } = await import('./services/engine/DispatchProfile');
+      const all = ['seguro', 'equilibrado', 'turbo'].map(m => {
+        const r = estimateEtaMinutes(totalLeads, numberCount, m);
+        return {
+          mode: m,
+          label: r.profile.label,
+          description: r.profile.description,
+          etaMinutes: Math.round(r.etaMinutes * 10) / 10,
+          etaSeconds: Math.round(r.etaSeconds),
+          effectiveRate: Math.round(r.effectiveRate * 100) / 100,
+          msgsPerHour: Math.round(r.effectiveRate * 3600),
+        };
+      });
+      const selected = all.find(x => x.mode === mode) || all[1];
+      res.json({ selected, all, totalLeads, numberCount });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.get("/api/dispatch/sender-health", async (req, res) => {
+    try {
+      const userId = req.session.userId!;
+      // Coleta phoneNumberIds de todas as WABAs do user
+      const userWabas = await wabaStorage.getWabasByUser(userId);
+      const allNumbers: Array<{ phoneNumberId: string; displayNumber?: string; wabaName?: string }> = [];
+      for (const w of userWabas) {
+        const nums = await wabaStorage.getWabaNumbers(w.id);
+        for (const n of nums) {
+          allNumbers.push({
+            phoneNumberId: n.phoneNumberId,
+            displayNumber: n.displayNumber,
+            wabaName: w.name,
+          });
+        }
+      }
+
+      if (allNumbers.length === 0) {
+        return res.json({ numbers: [], totalNumbers: 0 });
+      }
+
+      const { getHealthSummary } = await import('./services/engine/AdaptiveScoring');
+      const summary = await getHealthSummary(allNumbers.map(n => n.phoneNumberId));
+      const merged = summary.map(s => {
+        const meta = allNumbers.find(n => n.phoneNumberId === s.phoneNumberId);
+        return {
+          ...s,
+          displayNumber: meta?.displayNumber,
+          wabaName: meta?.wabaName,
+          weightSharePercent: Math.round(s.weightShare * 1000) / 10,
+        };
+      });
+      res.json({ numbers: merged, totalNumbers: merged.length });
+    } catch (error: any) {
+      logError('campaignRoutes.senderHealth', {}, error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.patch("/api/campaigns/managed/:id/dispatch-mode", async (req, res) => {
+    try {
+      const schema = z.object({
+        dispatchMode: z.enum(['seguro', 'equilibrado', 'turbo']),
+      });
+      const data = schema.parse(req.body);
+      const [updated] = await db.update(campaigns)
+        .set({ dispatchMode: data.dispatchMode, updatedAt: new Date() })
+        .where(and(eq(campaigns.id, req.params.id), eq(campaigns.userId, req.session.userId!)))
+        .returning();
+      if (!updated) return res.status(404).json({ error: "Campanha não encontrada" });
+      res.json(updated);
+    } catch (error: any) {
+      if (error instanceof z.ZodError) return res.status(400).json({ error: "Modo inválido", details: error.errors });
       res.status(500).json({ error: error.message });
     }
   });
@@ -417,6 +524,7 @@ export function registerCampaignRoutes(app: Express): void {
       const schema = z.object({
         sendConfig: z.record(z.unknown()).optional(),
         burstMode: z.boolean().optional(),
+        dispatchMode: z.enum(['seguro', 'equilibrado', 'turbo']).optional(),
         businessHoursOnly: z.boolean().optional(),
         businessHoursStart: z.number().optional(),
         businessHoursEnd: z.number().optional(),
@@ -431,6 +539,7 @@ export function registerCampaignRoutes(app: Express): void {
       const updates: Record<string, unknown> = { updatedAt: new Date() };
       if (data.sendConfig !== undefined) updates.sendConfig = data.sendConfig;
       if (data.burstMode !== undefined) updates.burstMode = data.burstMode;
+      if (data.dispatchMode !== undefined) updates.dispatchMode = data.dispatchMode;
       if (data.businessHoursOnly !== undefined) updates.businessHoursOnly = data.businessHoursOnly;
       if (data.businessHoursStart !== undefined) updates.businessHoursStart = data.businessHoursStart;
       if (data.businessHoursEnd !== undefined) updates.businessHoursEnd = data.businessHoursEnd;

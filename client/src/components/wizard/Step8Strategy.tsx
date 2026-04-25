@@ -1,11 +1,21 @@
+import { useEffect, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
+import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { Activity, Calendar, Clock, Music, Info } from "lucide-react";
+import { Activity, Calendar, Clock, Music, Info, Zap, Shield, Gauge, Timer } from "lucide-react";
 import AudioRecorder from "@/components/AudioRecorder";
+
+interface EtaResponse {
+  selected: { mode: string; label: string; etaMinutes: number; effectiveRate: number; msgsPerHour: number; description: string };
+  all: Array<{ mode: string; label: string; description: string; etaMinutes: number; effectiveRate: number; msgsPerHour: number }>;
+  totalLeads: number;
+  numberCount: number;
+}
 
 interface Step8StrategyProps {
   sendSpeed: string;
@@ -24,7 +34,17 @@ interface Step8StrategyProps {
   setCampaignAudioEnabled: (v: boolean) => void;
   campaignAudioUrl: string;
   setCampaignAudioUrl: (v: string) => void;
+  dispatchMode?: string;
+  setDispatchMode?: (v: string) => void;
+  estimatedLeads?: number;
+  estimatedNumbers?: number;
 }
+
+const MODE_META: Record<string, { icon: any; bg: string; ring: string; iconColor: string }> = {
+  seguro: { icon: Shield, bg: "bg-green-50", ring: "ring-green-500", iconColor: "text-green-600" },
+  equilibrado: { icon: Gauge, bg: "bg-blue-50", ring: "ring-blue-500", iconColor: "text-blue-600" },
+  turbo: { icon: Zap, bg: "bg-orange-50", ring: "ring-orange-500", iconColor: "text-orange-600" },
+};
 
 export default function Step8Strategy({
   sendSpeed, setSendSpeed, burstMode, setBurstMode,
@@ -34,7 +54,30 @@ export default function Step8Strategy({
   scheduledAt, setScheduledAt,
   campaignAudioEnabled, setCampaignAudioEnabled,
   campaignAudioUrl, setCampaignAudioUrl,
+  dispatchMode = "equilibrado",
+  setDispatchMode,
+  estimatedLeads = 2000,
+  estimatedNumbers = 1,
 }: Step8StrategyProps) {
+  const [selectedMode, setSelectedMode] = useState<string>(dispatchMode);
+
+  useEffect(() => {
+    setSelectedMode(dispatchMode);
+  }, [dispatchMode]);
+
+  const { data: etaData, isLoading: etaLoading } = useQuery<EtaResponse>({
+    queryKey: ["/api/dispatch/eta", estimatedLeads, estimatedNumbers, selectedMode],
+    queryFn: async () => {
+      const res = await fetch(`/api/dispatch/eta?totalLeads=${estimatedLeads}&numberCount=${Math.max(1, estimatedNumbers)}&mode=${selectedMode}`);
+      return res.json();
+    },
+  });
+
+  const handleModeChange = (mode: string) => {
+    setSelectedMode(mode);
+    setDispatchMode?.(mode);
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex items-center gap-3 mb-2">
@@ -43,54 +86,117 @@ export default function Step8Strategy({
         </div>
         <div>
           <h2 className="text-lg font-semibold text-gray-900">Estratégia de Envio</h2>
-          <p className="text-sm text-muted-foreground">Configure a velocidade, horários e agendamento do disparo</p>
+          <p className="text-sm text-muted-foreground">Escolha o modo de disparo. O motor adapta velocidade e segurança automaticamente.</p>
         </div>
       </div>
 
-      <div className="border rounded-xl p-4 space-y-3 shadow-sm">
-        <Label className="text-sm font-medium">Velocidade de Envio</Label>
-        <p className="text-xs text-muted-foreground">Escolha a velocidade de acordo com o volume de envios e a tolerância ao risco</p>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mt-2">
-          {[
-            { id: "slow", label: "Lento", desc: "1-2 msg/s" },
-            { id: "normal", label: "Normal", desc: "5-10 msg/s" },
-            { id: "fast", label: "Rápido", desc: "10-15 msg/s" },
-            { id: "custom", label: "Personalizado", desc: "Configurar" },
-          ].map((speed) => (
-            <div
-              key={speed.id}
-              className={`p-3 border rounded-xl cursor-pointer text-center transition-all ${
-                sendSpeed === speed.id ? "border-primary bg-primary/5 shadow-sm" : "hover:border-muted-foreground/50"
-              }`}
-              onClick={() => setSendSpeed(speed.id)}
-            >
-              <p className="font-medium text-sm">{speed.label}</p>
-              <p className="text-xs text-muted-foreground">{speed.desc}</p>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      <div className="flex items-center justify-between p-4 border rounded-xl bg-muted/20 hover:bg-muted/30 transition-colors">
-        <div className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded-lg bg-orange-100 flex items-center justify-center">
-            <Activity className="w-4 h-4 text-orange-600" />
-          </div>
+      {/* Modo de Disparo (NOVO) */}
+      <div className="border-2 rounded-xl p-4 space-y-4 shadow-sm bg-gradient-to-br from-white to-gray-50/50">
+        <div className="flex items-center justify-between">
           <div>
-            <div className="flex items-center gap-1">
-              <Label className="text-sm font-medium">Envio Simultâneo</Label>
-              <TooltipProvider>
-                <Tooltip>
-                  <TooltipTrigger asChild><Info className="w-3 h-3 text-muted-foreground cursor-help" /></TooltipTrigger>
-                  <TooltipContent><p className="text-xs max-w-xs">Envio em rajada com alta velocidade. Use com cuidado — pode causar bloqueios temporários em números com qualidade baixa.</p></TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
-            </div>
-            <p className="text-xs text-muted-foreground">Utiliza múltiplos números em paralelo (use com cuidado)</p>
+            <Label className="text-sm font-semibold">Modo de Disparo</Label>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              Selecionado: <span className="font-medium text-gray-900">{etaData?.selected?.label || "Equilibrado"}</span>
+              {etaData && (
+                <span className="ml-2 text-blue-600">
+                  · ETA {etaData.selected.etaMinutes}min para {etaData.totalLeads.toLocaleString("pt-BR")} mensagens
+                </span>
+              )}
+            </p>
+          </div>
+          <Badge variant="outline" className="text-[10px]">
+            {estimatedNumbers} {estimatedNumbers === 1 ? "número" : "números"}
+          </Badge>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          {(etaData?.all || [
+            { mode: "seguro", label: "Seguro", description: "Mais cauteloso", etaMinutes: 33, effectiveRate: 1, msgsPerHour: 3600 },
+            { mode: "equilibrado", label: "Equilibrado", description: "Recomendado", etaMinutes: 28, effectiveRate: 1.2, msgsPerHour: 4320 },
+            { mode: "turbo", label: "Turbo", description: "Velocidade máxima", etaMinutes: 22, effectiveRate: 1.5, msgsPerHour: 5400 },
+          ]).map((m) => {
+            const meta = MODE_META[m.mode] || MODE_META.equilibrado;
+            const Icon = meta.icon;
+            const isSelected = selectedMode === m.mode;
+            return (
+              <button
+                key={m.mode}
+                type="button"
+                data-testid={`button-mode-${m.mode}`}
+                onClick={() => handleModeChange(m.mode)}
+                className={`text-left p-4 rounded-xl border-2 transition-all hover-elevate active-elevate-2 ${
+                  isSelected ? `${meta.bg} ring-2 ${meta.ring} border-transparent` : "border-gray-200 hover:border-gray-300 bg-white"
+                }`}
+              >
+                <div className="flex items-center gap-2 mb-2">
+                  <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${isSelected ? "bg-white" : meta.bg}`}>
+                    <Icon className={`w-4 h-4 ${meta.iconColor}`} />
+                  </div>
+                  <div className="font-semibold text-sm">{m.label}</div>
+                  {isSelected && <Badge className="ml-auto text-[9px] h-4 px-1.5">Ativo</Badge>}
+                </div>
+                <p className="text-xs text-muted-foreground mb-3 leading-snug">{m.description}</p>
+                <div className="flex items-baseline gap-1.5 mb-1">
+                  <Timer className="w-3 h-3 text-muted-foreground" />
+                  <span className="text-base font-bold tabular-nums">{m.etaMinutes}</span>
+                  <span className="text-xs text-muted-foreground">min</span>
+                </div>
+                <div className="text-[10px] text-muted-foreground tabular-nums">
+                  ~{m.msgsPerHour.toLocaleString("pt-BR")} msg/h
+                </div>
+              </button>
+            );
+          })}
+        </div>
+
+        <div className="flex items-start gap-2 p-3 rounded-lg bg-blue-50/50 border border-blue-100">
+          <Info className="w-4 h-4 text-blue-600 flex-shrink-0 mt-0.5" />
+          <div className="text-xs text-blue-900 leading-relaxed">
+            <strong>Política sem auto-pausa:</strong> nenhum dos modos pausa a campanha por queda de qualidade.
+            Quando um número degrada, ele apenas recebe menos volume — os outros absorvem. Se ficar muito ruim,
+            ele continua enviando com peso mínimo (5%). Você decide quando pausar.
           </div>
         </div>
-        <Switch checked={burstMode} onCheckedChange={setBurstMode} />
       </div>
+
+      {/* Velocidade legada (avançado/oculto) */}
+      <details className="border rounded-xl">
+        <summary className="px-4 py-3 cursor-pointer text-sm font-medium text-muted-foreground hover:text-gray-900">
+          Configurações avançadas (legado)
+        </summary>
+        <div className="p-4 pt-0 space-y-3">
+          <div>
+            <Label className="text-xs text-muted-foreground">Velocidade legada (substituída pelo modo acima)</Label>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mt-2">
+              {[
+                { id: "slow", label: "Lento", desc: "1-2 msg/s" },
+                { id: "normal", label: "Normal", desc: "5-10 msg/s" },
+                { id: "fast", label: "Rápido", desc: "10-15 msg/s" },
+                { id: "custom", label: "Personalizado", desc: "Configurar" },
+              ].map((speed) => (
+                <div
+                  key={speed.id}
+                  data-testid={`button-speed-${speed.id}`}
+                  className={`p-3 border rounded-xl cursor-pointer text-center transition-all ${
+                    sendSpeed === speed.id ? "border-primary bg-primary/5 shadow-sm" : "hover:border-muted-foreground/50"
+                  }`}
+                  onClick={() => setSendSpeed(speed.id)}
+                >
+                  <p className="font-medium text-sm">{speed.label}</p>
+                  <p className="text-xs text-muted-foreground">{speed.desc}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+          <div className="flex items-center justify-between p-3 border rounded-lg bg-muted/20">
+            <div className="flex items-center gap-2">
+              <Activity className="w-4 h-4 text-orange-600" />
+              <Label className="text-xs">Burst mode (legado)</Label>
+            </div>
+            <Switch checked={burstMode} onCheckedChange={setBurstMode} data-testid="switch-burst-mode" />
+          </div>
+        </div>
+      </details>
 
       <div className="flex items-center justify-between p-4 border rounded-xl bg-muted/20 hover:bg-muted/30 transition-colors">
         <div className="flex items-center gap-3">
@@ -102,7 +208,7 @@ export default function Step8Strategy({
             <p className="text-xs text-muted-foreground">Enviar apenas dentro do horário comercial definido</p>
           </div>
         </div>
-        <Switch checked={businessHoursOnly} onCheckedChange={setBusinessHoursOnly} />
+        <Switch checked={businessHoursOnly} onCheckedChange={setBusinessHoursOnly} data-testid="switch-business-hours" />
       </div>
 
       {businessHoursOnly && (
@@ -110,7 +216,7 @@ export default function Step8Strategy({
           <div className="flex-1">
             <Label className="text-xs">Início</Label>
             <Select value={String(businessHoursStart)} onValueChange={(v) => setBusinessHoursStart(Number(v))}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectTrigger data-testid="select-business-start"><SelectValue /></SelectTrigger>
               <SelectContent>
                 {Array.from({ length: 24 }, (_, i) => (
                   <SelectItem key={i} value={String(i)}>{String(i).padStart(2, "0")}:00</SelectItem>
@@ -121,7 +227,7 @@ export default function Step8Strategy({
           <div className="flex-1">
             <Label className="text-xs">Fim</Label>
             <Select value={String(businessHoursEnd)} onValueChange={(v) => setBusinessHoursEnd(Number(v))}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectTrigger data-testid="select-business-end"><SelectValue /></SelectTrigger>
               <SelectContent>
                 {Array.from({ length: 24 }, (_, i) => (
                   <SelectItem key={i} value={String(i)}>{String(i).padStart(2, "0")}:00</SelectItem>
@@ -143,7 +249,7 @@ export default function Step8Strategy({
               <p className="text-xs text-muted-foreground">Grave ou informe um áudio para enviar junto com a campanha</p>
             </div>
           </div>
-          <Switch checked={campaignAudioEnabled} onCheckedChange={setCampaignAudioEnabled} />
+          <Switch checked={campaignAudioEnabled} onCheckedChange={setCampaignAudioEnabled} data-testid="switch-campaign-audio" />
         </div>
         {campaignAudioEnabled && (
           <div className="space-y-3 pl-4">
@@ -155,17 +261,16 @@ export default function Step8Strategy({
                   onChange={(e) => setCampaignAudioUrl(e.target.value)}
                   placeholder="https://exemplo.com/audio.ogg"
                   className="h-8 text-sm"
+                  data-testid="input-audio-url"
                 />
               </div>
-              <AudioRecorder
-                onRecorded={(url) => setCampaignAudioUrl(url)}
-              />
+              <AudioRecorder onRecorded={(url) => setCampaignAudioUrl(url)} />
             </div>
             {campaignAudioUrl && (
               <div className="flex items-center gap-2 bg-muted/30 p-2 rounded-lg">
                 <Music className="w-3 h-3 text-primary" />
                 <audio controls src={campaignAudioUrl} className="h-8 flex-1" />
-                <Button variant="ghost" size="sm" className="h-6 px-2 text-xs text-red-500" onClick={() => setCampaignAudioUrl("")}>
+                <Button variant="ghost" size="sm" className="h-6 px-2 text-xs text-red-500" onClick={() => setCampaignAudioUrl("")} data-testid="button-remove-audio">
                   Remover
                 </Button>
               </div>
@@ -188,6 +293,7 @@ export default function Step8Strategy({
           type="datetime-local"
           value={scheduledAt}
           onChange={(e) => setScheduledAt(e.target.value)}
+          data-testid="input-scheduled-at"
         />
         {scheduledAt && (
           <div className="flex items-center gap-2">
@@ -195,7 +301,7 @@ export default function Step8Strategy({
             <span className="text-xs text-muted-foreground">
               Agendado para: {new Date(scheduledAt).toLocaleString("pt-BR")}
             </span>
-            <Button variant="ghost" size="sm" className="h-6 px-2 text-xs" onClick={() => setScheduledAt("")}>
+            <Button variant="ghost" size="sm" className="h-6 px-2 text-xs" onClick={() => setScheduledAt("")} data-testid="button-clear-schedule">
               Remover
             </Button>
           </div>

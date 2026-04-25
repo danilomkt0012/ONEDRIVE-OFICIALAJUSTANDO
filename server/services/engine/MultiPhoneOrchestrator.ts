@@ -109,7 +109,7 @@ export class MultiPhoneOrchestrator {
       this.controllers.set(phone.id, controller);
     }
     
-    this.calculateWeights();
+    this.calculateWeightsSync();
     
     console.log(`\n🎯 Orquestrador inicializado com ${this.controllers.size} números`);
     console.log(`   📊 Estratégia: ${this.config.strategy}`);
@@ -118,48 +118,63 @@ export class MultiPhoneOrchestrator {
   }
 
   /**
-   * Calcula pesos para distribuição weighted/adaptive
+   * Calcula pesos para distribuição weighted/adaptive.
+   * Agora consulta AdaptiveScoring (score 0-100) como base, com mínimo de 5%
+   * para garantir que TODOS os números (inclusive novos) sempre recebam mensagens.
    */
-  private calculateWeights(): void {
+  private async calculateWeights(): Promise<void> {
     this.phoneWeights = [];
+
+    const ids = Array.from(this.controllers.keys());
+    if (ids.length === 0) return;
+
+    // Tenta usar o AdaptiveScoring (peso real baseado em performance)
+    let scoreMap: Map<string, number> | null = null;
+    try {
+      const { getScoresMany, computeWeights } = await import('./AdaptiveScoring');
+      const scores = await getScoresMany(ids);
+      scoreMap = computeWeights(scores); // já normalizado e com mínimo de 5%
+    } catch {
+      scoreMap = null;
+    }
+
     let cumulative = 0;
-    
     const entries = Array.from(this.controllers.entries());
     for (const [phoneId, controller] of entries) {
       const stats = controller.getStats();
-      
       let weight = 1.0;
-      
-      switch (stats.qualityRating) {
-        case 'GREEN': weight = 1.5; break;
-        case 'YELLOW': weight = 1.0; break;
-        case 'RED': weight = 0.5; break;
+
+      if (scoreMap && scoreMap.has(phoneId)) {
+        // Score-based weight (já normalizado para somar 1)
+        weight = Math.max(0.05, scoreMap.get(phoneId)!);
+      } else {
+        // Fallback legado por quality_rating
+        switch (stats.qualityRating) {
+          case 'GREEN': weight = 1.5; break;
+          case 'YELLOW': weight = 1.0; break;
+          case 'RED': weight = 0.5; break;
+        }
       }
-      
+
+      // Bônus adaptativo (RTT)
       if (this.config.strategy === 'adaptive') {
-        if (!controller.isHealthy()) {
-          weight *= 0.1;
-        }
-        
-        if (stats.avgRttMs > 0 && stats.avgRttMs < this.config.targetRttMs) {
-          weight *= 1.2;
-        } else if (stats.avgRttMs > this.config.targetRttMs * 1.5) {
-          weight *= 0.7;
-        }
-        
-        if (stats.currentRate > 0) {
-          weight *= Math.min(1.5, stats.currentRate / this.config.baseRefillRate);
-        }
+        if (stats.avgRttMs > 0 && stats.avgRttMs < this.config.targetRttMs) weight *= 1.15;
+        else if (stats.avgRttMs > this.config.targetRttMs * 1.5) weight *= 0.85;
       }
-      
+
+      // Garante peso mínimo de 5% — nunca zera um número
+      const minFloor = scoreMap ? 0.05 : 0.1;
+      if (weight < minFloor) weight = minFloor;
+
       cumulative += weight;
-      
-      this.phoneWeights.push({
-        phoneId,
-        weight,
-        cumulativeWeight: cumulative
-      });
+      this.phoneWeights.push({ phoneId, weight, cumulativeWeight: cumulative });
     }
+  }
+
+  /** Wrapper síncrono para compatibilidade com código legado que chama calculateWeights() sync */
+  private calculateWeightsSync(): void {
+    // Trigger async recompute em background, mas mantém último cálculo
+    this.calculateWeights().catch(() => {});
   }
 
   /**
@@ -303,7 +318,7 @@ export class MultiPhoneOrchestrator {
    */
   updateWeights(): void {
     if (this.config.strategy === 'adaptive') {
-      this.calculateWeights();
+      this.calculateWeightsSync();
     }
   }
 

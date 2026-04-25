@@ -60,6 +60,9 @@ export const wabaNumbers = pgTable("waba_numbers", {
   verifiedName: text("verified_name"),
   qualityRating: text("quality_rating").default("UNKNOWN"),
   tier: text("tier"),
+  confidenceScore: integer("confidence_score").default(50),
+  scoreUpdatedAt: timestamp("score_updated_at"),
+  scoreSamples: integer("score_samples").default(0),
   createdAt: timestamp("created_at").defaultNow(),
 });
 
@@ -207,6 +210,7 @@ export const campaigns = pgTable("campaigns", {
   conversionDelayMs: integer("conversion_delay_ms").default(0),
   conversionsSent: integer("conversions_sent").default(0),
   burstMode: boolean("burst_mode").default(false),
+  dispatchMode: text("dispatch_mode").default("equilibrado"),
   businessHoursOnly: boolean("business_hours_only").default(false),
   businessHoursStart: integer("business_hours_start").default(8),
   businessHoursEnd: integer("business_hours_end").default(20),
@@ -286,6 +290,32 @@ export const senderUsage = pgTable("sender_usage", {
   lastSent: timestamp("last_sent").defaultNow(),
   cooldownUntil: timestamp("cooldown_until"),
 });
+
+export const frequencyBlacklist = pgTable("frequency_blacklist", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  phone: text("phone").notNull(),
+  reason: text("reason").notNull().default("error_131049"),
+  errorCode: integer("error_code"),
+  blockedUntil: timestamp("blocked_until").notNull(),
+  hitCount: integer("hit_count").notNull().default(1),
+  lastHitAt: timestamp("last_hit_at").defaultNow(),
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => [
+  index("idx_freq_blacklist_phone").on(table.phone),
+  index("idx_freq_blacklist_until").on(table.blockedUntil),
+]);
+
+export const senderScoreHistory = pgTable("sender_score_history", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  phoneNumberId: text("phone_number_id").notNull(),
+  score: integer("score").notNull(),
+  deliveredRate: integer("delivered_rate"),
+  errorRate: integer("error_rate"),
+  reason: text("reason"),
+  recordedAt: timestamp("recorded_at").defaultNow(),
+}, (table) => [
+  index("idx_sender_score_phone_time").on(table.phoneNumberId, table.recordedAt),
+]);
 
 export const paymentGateways = pgTable("payment_gateways", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),

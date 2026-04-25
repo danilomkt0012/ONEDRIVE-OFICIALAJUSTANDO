@@ -76,6 +76,7 @@ export default function CampaignWizardPage() {
 
   const [sendSpeed, setSendSpeed] = useState("normal");
   const [burstMode, setBurstMode] = useState(false);
+  const [dispatchMode, setDispatchMode] = useState<string>("equilibrado");
   const [businessHoursOnly, setBusinessHoursOnly] = useState(false);
   const [businessHoursStart, setBusinessHoursStart] = useState(8);
   const [businessHoursEnd, setBusinessHoursEnd] = useState(20);
@@ -708,6 +709,7 @@ export default function CampaignWizardPage() {
       }
       setLeadListId(campaign.leadListId || "");
       setBurstMode(campaign.burstMode || false);
+      if ((campaign as any).dispatchMode) setDispatchMode((campaign as any).dispatchMode);
       setBusinessHoursOnly(campaign.businessHoursOnly || false);
       setBusinessHoursStart(campaign.businessHoursStart || 8);
       setBusinessHoursEnd(campaign.businessHoursEnd || 20);
@@ -917,6 +919,7 @@ export default function CampaignWizardPage() {
             speed: sendSpeed,
           },
           burstMode,
+          dispatchMode,
           businessHoursOnly,
           businessHoursStart,
           businessHoursEnd,
@@ -1405,6 +1408,10 @@ export default function CampaignWizardPage() {
                   scheduledAt={scheduledAt} setScheduledAt={setScheduledAt}
                   campaignAudioEnabled={campaignAudioEnabled} setCampaignAudioEnabled={setCampaignAudioEnabled}
                   campaignAudioUrl={campaignAudioUrl} setCampaignAudioUrl={setCampaignAudioUrl}
+                  dispatchMode={dispatchMode}
+                  setDispatchMode={setDispatchMode}
+                  estimatedLeads={(directLeads.length || (selectedLeadList?.validLeads ?? selectedLeadList?.totalLeads ?? 2000))}
+                  estimatedNumbers={Math.max(1, selectedNumbers.length)}
                 />
               </div>
             </div>

@@ -1189,10 +1189,14 @@ export default function CampaignDetailPage() {
       )}
 
       <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList className="grid w-full grid-cols-6">
+        <TabsList className="grid w-full grid-cols-7">
           <TabsTrigger value="metrics" className="gap-1">
             <BarChart3 className="w-4 h-4" />
             <span className="hidden sm:inline">Métricas</span>
+          </TabsTrigger>
+          <TabsTrigger value="senders" className="gap-1" data-testid="tab-senders">
+            <Activity className="w-4 h-4" />
+            <span className="hidden sm:inline">Números</span>
           </TabsTrigger>
           <TabsTrigger value="bot" className="gap-1">
             <Bot className="w-4 h-4" />
@@ -1216,6 +1220,10 @@ export default function CampaignDetailPage() {
             {!webhookConfigured && <AlertTriangle className="w-3 h-3 text-red-500" />}
           </TabsTrigger>
         </TabsList>
+
+        <TabsContent value="senders" className="mt-4">
+          <SenderHealthPanel />
+        </TabsContent>
 
         <TabsContent value="metrics" className="mt-4 space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
