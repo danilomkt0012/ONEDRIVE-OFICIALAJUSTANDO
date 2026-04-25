@@ -355,10 +355,10 @@ export class UltraStableEngine {
     
     
     this.pipeline = new RequestPipeline({
-      maxConcurrentRequests: Math.min(this.config.maxConcurrentRequests, 3),
-      prefetchCount: Math.min(this.config.prefetchCount, 2),
-      queueHighWaterMark: 5,
-      drainLowWaterMark: 1
+      maxConcurrentRequests: Math.min(this.config.maxConcurrentRequests, 8),
+      prefetchCount: Math.min(this.config.prefetchCount, 4),
+      queueHighWaterMark: 12,
+      drainLowWaterMark: 2
     });
     
     this.burstProfile = new BurstProfile({

@@ -68,23 +68,23 @@ export interface SpeedPreset {
 
 export const SPEED_PRESETS: Record<SendSpeedMode, SpeedPreset> = {
   SLOW: {
-    initialRate: 0.3,
-    maxRate: 0.3,
-    maxConcurrentRequests: 1,
+    initialRate: 0.6,
+    maxRate: 0.6,
+    maxConcurrentRequests: 2,
     targetRttMs: 400,
     burstMultiplier: 1.0,
   },
   NORMAL: {
-    initialRate: 0.5,
-    maxRate: 0.5,
-    maxConcurrentRequests: 2,
+    initialRate: 1.1,
+    maxRate: 1.1,
+    maxConcurrentRequests: 3,
     targetRttMs: 300,
     burstMultiplier: 1.0,
   },
   FAST: {
-    initialRate: 0.8,
-    maxRate: 0.8,
-    maxConcurrentRequests: 3,
+    initialRate: 1.3,
+    maxRate: 1.3,
+    maxConcurrentRequests: 4,
     targetRttMs: 250,
     burstMultiplier: 1.0,
   },
@@ -253,9 +253,9 @@ export class UltraStableCampaignSender {
       ...(Object.keys(templateCategories).length > 0 ? { templateCategories } : {}),
     };
 
-    const safeRate = hardRate ? Math.min(hardRate, 0.8) : preset.initialRate;
-    const safeMaxRate = hardRate ? Math.min(hardRate, 0.8) : preset.maxRate;
-    const safeConcurrency = hardRate ? Math.min(3, Math.max(1, Math.floor(hardRate))) : preset.maxConcurrentRequests;
+    const safeRate = hardRate ? Math.min(hardRate, 1.3) : preset.initialRate;
+    const safeMaxRate = hardRate ? Math.min(hardRate, 1.3) : preset.maxRate;
+    const safeConcurrency = hardRate ? Math.min(8, Math.max(2, Math.ceil(hardRate * 3))) : preset.maxConcurrentRequests;
 
     if (hardRate) {
       console.log(`⚡ SpeedMode: MANUAL FIXO (rate=${safeRate} msg/s, sem burst, sem aceleração)`);
@@ -278,7 +278,7 @@ export class UltraStableCampaignSender {
       checkpointEveryN: 50,
       checkpointFlushMs: 3000,
       circuitBreakerCooldownMs: 15000,
-      safeMode: speedMode === 'SLOW' ? { maxRefillRate: 0.3, maxConcurrentRequests: 1 } : {},
+      safeMode: speedMode === 'SLOW' ? { maxRefillRate: 0.6, maxConcurrentRequests: 2 } : {},
       enablePreflightValidation: true,
       enableAutoTierDetection: false,
       strictPreflightMode: speedMode === 'SLOW',
@@ -288,9 +288,9 @@ export class UltraStableCampaignSender {
       templateWeights,
       humanBehavior: humanBehaviorConfig,
       enableMicroBatching: true,
-      microBatchSize: 150,
-      microBatchPauseMinMs: 60000,
-      microBatchPauseMaxMs: 120000,
+      microBatchSize: 300,
+      microBatchPauseMinMs: 10000,
+      microBatchPauseMaxMs: 25000,
       wabaConfigs: config.wabaConfigs || [],
       deliveryRateAutoPauseThreshold: config.deliveryRateAutoPauseThreshold ?? 0.5,
       deliveryRateReduceThreshold: config.deliveryRateReduceThreshold ?? 0.6,

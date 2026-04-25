@@ -55,10 +55,10 @@ const BASE_TYPE_STRATEGIES: Record<BaseType, BaseTypeStrategy> = {
 };
 
 const DEFAULT_CONFIG: HumanBehaviorConfig = {
-  baseDelayMeanMs: 5500,
-  baseDelayStdDevMs: 1200,
-  baseDelayMinMs: 3000,
-  baseDelayMaxMs: 8000,
+  baseDelayMeanMs: 1600,
+  baseDelayStdDevMs: 300,
+  baseDelayMinMs: 1000,
+  baseDelayMaxMs: 2200,
 
   longPauseMinMs: 8000,
   longPauseMaxMs: 15000,
