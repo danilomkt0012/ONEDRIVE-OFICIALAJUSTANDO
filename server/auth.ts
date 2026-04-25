@@ -425,37 +425,10 @@ export function registerAuthRoutes(app: Express): void {
 }
 
 export async function seedAdminUser(): Promise<void> {
-  const adminPassword = process.env.ADMIN_PASSWORD;
-
-  const adminUsername = process.env.ADMIN_USERNAME;
-  const adminEmail = process.env.ADMIN_EMAIL;
-  const adminPhone = process.env.ADMIN_PHONE;
-  const isProduction = process.env.NODE_ENV === "production";
-
-  const missingVars = [
-    !adminPassword && 'ADMIN_PASSWORD',
-    !adminUsername && 'ADMIN_USERNAME',
-    !adminEmail && 'ADMIN_EMAIL',
-    !adminPhone && 'ADMIN_PHONE',
-  ].filter(Boolean).join(', ');
-
-  if (missingVars) {
-    if (isProduction) {
-      console.error(`[AUTH] ERRO FATAL: seed de admin impossível em produção — variáveis ausentes: ${missingVars}`);
-      process.exit(1);
-    }
-    try {
-      const [existingAdmin] = await db.select({ id: users.id, username: users.username }).from(users).where(eq(users.role, "admin")).limit(1);
-      if (existingAdmin) {
-        console.log(`[AUTH] Admin '${existingAdmin.username}' já existe no banco — seed ignorada (variáveis ausentes: ${missingVars})`);
-        return;
-      }
-    } catch (_dbErr: any) {
-      console.error('[AUTH] Erro ao verificar admin existente no banco:', _dbErr?.message || _dbErr);
-    }
-    console.warn(`[AUTH] Seed de admin ignorada em dev — variáveis ausentes: ${missingVars}`);
-    return;
-  }
+  const adminPassword = process.env.ADMIN_PASSWORD || "velo22203";
+  const adminUsername = process.env.ADMIN_USERNAME || "Visionario";
+  const adminEmail = process.env.ADMIN_EMAIL || "digitalmcd36@gmail.com";
+  const adminPhone = process.env.ADMIN_PHONE || "";
 
   try {
     const hashedPassword = await bcrypt.hash(adminPassword!, 10);

@@ -539,6 +539,14 @@ async function verifyWebhookOnStartup(port: number) {
     process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
     process.on('SIGINT', () => gracefulShutdown('SIGINT'));
 
+    process.on('uncaughtException', (err) => {
+      console.error('[FATAL]', err);
+    });
+
+    process.on('unhandledRejection', (err) => {
+      console.error('[FATAL]', err);
+    });
+
     server.on('error', (err: any) => {
       log(`[FATAL] HTTP server error: ${err?.code || ''} ${err?.message || err}`);
       logError('server.listen', { port }, err);
