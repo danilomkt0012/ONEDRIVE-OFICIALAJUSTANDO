@@ -34,9 +34,10 @@ const isProduction = process.env.NODE_ENV === "production";
 
 const REQUIRED_ENV_VARS = ["DATABASE_URL"];
 
-const REQUIRED_IN_PRODUCTION: string[] = ["SESSION_SECRET", "META_APP_SECRET", "WEBHOOK_VERIFY_TOKEN"];
+const REQUIRED_IN_PRODUCTION: string[] = ["SESSION_SECRET", "META_APP_SECRET"];
 
 const RECOMMENDED_ENV_VARS = [
+  "WEBHOOK_VERIFY_TOKEN",
   "STATS_API_KEY",
 ];
 
