@@ -4,6 +4,7 @@ import crypto from "crypto";
 import fs from "fs";
 import path from "path";
 import rateLimit from "express-rate-limit";
+import { requireAdmin } from "./middleware/auth";
 import { storage } from "./storage";
 import { wabaStorage } from "./wabaStorage";
 import { ObjectStorageService, ObjectNotFoundError } from "./objectStorage";
@@ -7222,6 +7223,50 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error: any) {
       routeError('getApiCampaignsWabaDistribution', {}, error);
       res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Lightweight admin health snapshot — reuses existing engine state, scorer and counters.
+  app.get("/api/admin/health", requireAdmin, (_req, res) => {
+    try {
+      const dash = deliveryMetricsTracker.getDashboardData();
+      const windowMs = dash.windowedRates?.windowMs || 300000;
+      const sentInWindow = dash.windowedRates?.sent || 0;
+      const messagesPerMinute = windowMs > 0 ? Math.round((sentInWindow / windowMs) * 60000) : 0;
+
+      let queueSize = 0;
+      let globalPressure = 1;
+      const wabaMap = new Map<string, { id: string; score: number; weight: number; blockRate: number }>();
+
+      for (const engine of activeEngines) {
+        try {
+          if (engine.getGlobalPressure) globalPressure = engine.getGlobalPressure();
+          const dist = engine.getWabaDistribution ? (engine.getWabaDistribution() || []) : [];
+          for (const d of dist) {
+            const id = (d as any).wabaId || (d as any).id;
+            if (!id) continue;
+            wabaMap.set(id, {
+              id,
+              score: Number((d as any).score ?? 0),
+              weight: Number((d as any).weight ?? 0),
+              blockRate: Number((d as any).blockRate ?? 0),
+            });
+          }
+        } catch {}
+      }
+
+      const metaStatus: "ok" | "error" = dash.autoPaused ? "error" : "ok";
+
+      res.json({
+        metaStatus,
+        queueSize,
+        activeJobs: activeEngines.size,
+        messagesPerMinute,
+        globalPressure,
+        wabas: Array.from(wabaMap.values()),
+      });
+    } catch (error: any) {
+      res.status(500).json({ metaStatus: "error", error: error?.message || "internal_error" });
     }
   });
 
