@@ -624,7 +624,7 @@ export class UltraStableEngine {
       }
 
       if (this.wabaScorer && wabaIdForTracking) {
-        this.wabaScorer.recordResult(wabaIdForTracking, 'success');
+        this.wabaScorer.recordResult(wabaIdForTracking, 'success', rttMs);
       }
 
       const pacingTest = this.pacingTestJobs.get(leadIndex);
@@ -930,11 +930,10 @@ export class UltraStableEngine {
         console.log(`\n🚨 [RiskEngine] PAUSE: ativando SafeMode por risco crítico (blockRate=${(blockRate * 100).toFixed(1)}%)`);
         this.safeMode.activate('risk_engine_pause');
         if (blockRate >= threshold) {
-          console.log(`\n🚨 [RiskEngine] BLOCK RATE AUTO-PAUSE: blockRate=${(blockRate * 100).toFixed(1)}% >= threshold=${(threshold * 100).toFixed(0)}% — pausando campanha`);
-          this.asyncCheckpoint.error(`RiskEngine: campanha pausada automaticamente por block rate alto (${(blockRate * 100).toFixed(1)}% >= ${(threshold * 100).toFixed(0)}%)`);
-          const pauseReason = `Block rate ${(blockRate * 100).toFixed(1)}% ultrapassou limite de ${(threshold * 100).toFixed(0)}%`;
-          this.notifyBlockRatePause(pauseReason, blockRate);
-          this.pause();
+          // SOFT MODE: never globally pause — log + SafeMode (rate-reduce) handles back-off.
+          // WabaScorer soft-quarantines per-WABA; engine keeps sending continuously.
+          console.log(`\n⚠️ [RiskEngine] BLOCK RATE HIGH (soft): blockRate=${(blockRate * 100).toFixed(1)}% >= ${(threshold * 100).toFixed(0)}% — SafeMode active, continuing.`);
+          this.asyncCheckpoint.warn(`RiskEngine: SafeMode mantido por block rate alto (${(blockRate * 100).toFixed(1)}% >= ${(threshold * 100).toFixed(0)}%) — campanha NÃO pausada.`);
         }
         break;
       }
@@ -1559,8 +1558,8 @@ export class UltraStableEngine {
       }
 
       this.decisionEngine.onPauseCampaign((cId, reason) => {
-        console.log(`[DECISION] Pause campaign: campaignId=${cId} reason="${reason}"`);
-        this.pause();
+        // SOFT MODE: log only — never globally pause. SafeMode/scorer handle back-off.
+        console.log(`[DECISION] Pause request ignored (soft mode): campaignId=${cId} reason="${reason}"`);
       });
 
       this.decisionEngine.onSlowDown((cId, phoneId, factor) => {
@@ -1568,8 +1567,8 @@ export class UltraStableEngine {
       });
 
       this.decisionEngine.onDisableNumber((cId, phoneId, reason) => {
-        console.log(`[DECISION] Disable number: campaignId=${cId} phoneId=${phoneId} reason="${reason}"`);
-        this.pause();
+        // SOFT MODE: log only — phone weight is reduced via rebalance, never paused.
+        console.log(`[DECISION] Disable request ignored (soft mode): campaignId=${cId} phoneId=${phoneId} reason="${reason}"`);
       });
 
       this.decisionEngine.onRebalance((cId, weights) => {
@@ -1583,8 +1582,8 @@ export class UltraStableEngine {
         }
         const myWeight = weights.get(this.currentPhoneNumberId);
         if (myWeight !== undefined && myWeight <= 0.2) {
-          console.log(`[DECISION] Phone ${this.currentPhoneNumberId} weight=${myWeight} — pausing this engine`);
-          this.pause();
+          // SOFT MODE: low weight reduces traffic via coordinator; never pause this engine.
+          console.log(`[DECISION] Phone ${this.currentPhoneNumberId} weight=${myWeight} — soft-quarantine (no pause)`);
         }
       });
     }
@@ -2164,6 +2163,14 @@ export class UltraStableEngine {
             if (this.wabaScorer) {
               const picked = this.wabaScorer.pickWabaIndex();
               if (picked >= 0) this.currentWabaIndex = picked;
+              // Light global pressure: shrink refill rate when fleet is stressed.
+              if (this.wabaScorer.shouldRebalance()) {
+                const pressure = this.wabaScorer.getGlobalPressure();
+                if (pressure < 1) {
+                  const target = Math.max(this.config.minRefillRate, this.config.maxRefillRate * pressure);
+                  this.tokenBucket.setRefillRate(target);
+                }
+              }
             } else {
               this.currentWabaIndex = (this.currentWabaIndex + 1) % this.config.wabaConfigs.length;
             }
