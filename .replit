@@ -9,7 +9,7 @@ packages = ["libsndfile"]
 [deployment]
 deploymentTarget = "autoscale"
 build = ["npm", "run", "build"]
-run = ["node", "./dist/index.cjs"]
+run = ["node", "dist/index.js"]
 
 [env]
 PORT = "5000"
