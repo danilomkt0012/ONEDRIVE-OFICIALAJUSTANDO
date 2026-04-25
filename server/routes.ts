@@ -7196,6 +7196,31 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Per-WABA distribution snapshot for multi-WABA campaigns.
+  // Returns the live weighted-RR distribution from the running engine.
+  app.get("/api/campaigns/:id/waba-distribution", async (req, res) => {
+    try {
+      const campaignId = req.params.id;
+      let distribution: any[] = [];
+      let active = false;
+
+      for (const engine of activeEngines) {
+        if (engine.getCampaignId && engine.getCampaignId() === campaignId) {
+          active = true;
+          if (engine.getWabaDistribution) {
+            distribution = engine.getWabaDistribution() || [];
+          }
+          break;
+        }
+      }
+
+      res.json({ campaignId, active, distribution });
+    } catch (error: any) {
+      routeError('getApiCampaignsWabaDistribution', {}, error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
   // ────────────────────────────────────────────────────────────────────────────
   // Warm-up Scheduler (Task 6)
   // ────────────────────────────────────────────────────────────────────────────

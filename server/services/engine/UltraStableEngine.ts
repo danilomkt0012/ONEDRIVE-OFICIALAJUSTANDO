@@ -48,6 +48,7 @@ import { SlidingWindowMetrics } from '../risk/SlidingWindowMetrics';
 import { checkpointStore } from '../campaign/CheckpointStore';
 import { nextSender, incrementSender, markDead, shouldSwitchSender, getAllSenders } from './SenderPool';
 import { stealthScheduler } from './StealthScheduler';
+import { WabaScorer, WabaDistributionEntry } from './WabaScorer';
 import { bmQualityMonitor } from './BMQualityMonitor';
 import { shouldBlockMarketingTemplate } from './TierDetection';
 import { HumanBehavior, TemplatePacingBackoff, type HumanBehaviorConfig, type BaseType } from './HumanBehavior';
@@ -287,6 +288,7 @@ export class UltraStableEngine {
   private microBatchSentCount: number = 0;
   private microBatchNumber: number = 0;
   private currentWabaIndex: number = 0;
+  private wabaScorer: WabaScorer | null = null;
   private deliveryMetrics: DeliveryMetricsTracker;
   private responseRateTracker: ResponseRateTracker;
   private phoneReputationScore: PhoneReputationScore;
@@ -333,7 +335,12 @@ export class UltraStableEngine {
       deliveryRateWindowMs: config.deliveryRateWindowMs ?? 300000,
       blockRateAutoPauseThreshold: config.blockRateAutoPauseThreshold ?? 0.15,
     };
-    
+
+    if (this.config.wabaConfigs.length > 1) {
+      const ids = this.config.wabaConfigs.map(w => w.wabaId);
+      this.wabaScorer = new WabaScorer(ids, { windowSize: 50, rebalanceEvery: 50 });
+    }
+
     this.tokenBucket = new TokenBucket({
       maxTokens: this.config.tokenBucketMaxTokens ?? 5,
       refillRate: this.config.initialRefillRate,
@@ -615,7 +622,11 @@ export class UltraStableEngine {
       if (this.decisionEngine) {
         this.decisionEngine.recordDeliveryForWaba(jobPhoneId, 'sent');
       }
-      
+
+      if (this.wabaScorer && wabaIdForTracking) {
+        this.wabaScorer.recordResult(wabaIdForTracking, 'success');
+      }
+
       const pacingTest = this.pacingTestJobs.get(leadIndex);
       if (pacingTest) {
         this.templatePacingBackoff.recordTestSuccess(pacingTest.phoneId, pacingTest.templateName);
@@ -679,6 +690,15 @@ export class UltraStableEngine {
       
       if (this.decisionEngine) {
         this.decisionEngine.recordDeliveryForWaba(jobPhoneId, 'failed');
+      }
+
+      if (this.wabaScorer) {
+        const ownerWaba = this.config.wabaConfigs.find(w => w.phoneNumberIds.includes(jobPhoneId));
+        const wid = ownerWaba?.wabaId || this.config.wabaConfigs[0]?.wabaId;
+        if (wid) {
+          const isBlock = errorType === 'environment' || errorCode === 131026 || errorCode === 368 || errorCode === 131031;
+          this.wabaScorer.recordResult(wid, isBlock ? 'block' : 'fail');
+        }
       }
 
       db.insert(messageDeliveries).values({
@@ -2141,7 +2161,12 @@ export class UltraStableEngine {
           });
 
           if (this.config.wabaConfigs.length > 1) {
-            this.currentWabaIndex = (this.currentWabaIndex + 1) % this.config.wabaConfigs.length;
+            if (this.wabaScorer) {
+              const picked = this.wabaScorer.pickWabaIndex();
+              if (picked >= 0) this.currentWabaIndex = picked;
+            } else {
+              this.currentWabaIndex = (this.currentWabaIndex + 1) % this.config.wabaConfigs.length;
+            }
             const nextWaba = this.config.wabaConfigs[this.currentWabaIndex];
             metaToken = nextWaba.accessToken;
             this.currentMetaToken = nextWaba.accessToken;
@@ -2382,6 +2407,14 @@ export class UltraStableEngine {
 
   getStats(): UltraStableStats {
     return { ...this.stats };
+  }
+
+  /**
+   * Returns the current per-WABA distribution snapshot when this engine
+   * is running in multi-WABA mode. Empty array when not configured.
+   */
+  getWabaDistribution(): WabaDistributionEntry[] {
+    return this.wabaScorer ? this.wabaScorer.getDistribution() : [];
   }
 
   isActive(): boolean {

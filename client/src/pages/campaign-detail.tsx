@@ -1073,6 +1073,17 @@ export default function CampaignDetailPage() {
     refetchInterval: 5000,
   });
 
+  const { data: wabaDistData } = useQuery<{ campaignId: string; active: boolean; distribution: Array<{ wabaId: string; sent: number; success: number; failed: number; blocked: number; successRate: number; errorRate: number; blockRate: number; score: number; weight: number; totalSent: number; totalSuccess: number; totalFailed: number; totalBlocked: number; picked: number }> }>({
+    queryKey: ["/api/campaigns", campaignId, "waba-distribution"],
+    queryFn: async () => {
+      const res = await fetch(`/api/campaigns/${campaignId}/waba-distribution`);
+      if (!res.ok) return { campaignId: campaignId!, active: false, distribution: [] };
+      return res.json();
+    },
+    enabled: !!campaignId && activeTab === "metrics",
+    refetchInterval: 5000,
+  });
+
   const { data: contacts = [] } = useQuery({
     queryKey: ["/api/campaigns/managed", campaignId, "contacts"],
     queryFn: async () => {
@@ -1503,6 +1514,95 @@ export default function CampaignDetailPage() {
                       <span className="text-muted-foreground">Concorrencia:</span>{" "}
                       {live.concurrency || 0}
                     </div>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
+            {wabaDistData?.active && wabaDistData.distribution.length > 1 && (
+              <Card className="md:col-span-2" data-testid="card-waba-distribution">
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-sm flex items-center justify-between">
+                    <span>Distribuição Multi-WABA (Round-Robin Ponderado)</span>
+                    <Badge variant="outline" className="text-xs">
+                      {wabaDistData.distribution.length} WABAs ativos
+                    </Badge>
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-3">
+                    {wabaDistData.distribution.map((w) => {
+                      const totalPicked = wabaDistData.distribution.reduce((s, x) => s + (x.picked || 0), 0);
+                      const sharePct = totalPicked > 0 ? (w.picked / totalPicked) * 100 : 0;
+                      const scorePct = Math.round(w.score * 100);
+                      const scoreColor =
+                        w.score >= 0.8 ? "bg-green-500" :
+                        w.score >= 0.5 ? "bg-yellow-500" : "bg-red-500";
+                      return (
+                        <div
+                          key={w.wabaId}
+                          className="border rounded-lg p-3 space-y-2"
+                          data-testid={`waba-card-${w.wabaId}`}
+                        >
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                              <span className={`inline-block w-2 h-2 rounded-full ${scoreColor}`} />
+                              <span className="font-mono text-xs text-muted-foreground" data-testid={`text-waba-id-${w.wabaId}`}>
+                                {w.wabaId}
+                              </span>
+                            </div>
+                            <div className="flex items-center gap-2 text-xs">
+                              <Badge variant="secondary" data-testid={`badge-waba-share-${w.wabaId}`}>
+                                {sharePct.toFixed(1)}% do tráfego
+                              </Badge>
+                              <Badge variant="outline" data-testid={`badge-waba-score-${w.wabaId}`}>
+                                Score {scorePct}
+                              </Badge>
+                            </div>
+                          </div>
+                          <div className="w-full bg-muted rounded-full h-1.5 overflow-hidden">
+                            <div
+                              className={`h-full ${scoreColor} transition-all`}
+                              style={{ width: `${Math.max(2, sharePct)}%` }}
+                            />
+                          </div>
+                          <div className="grid grid-cols-2 md:grid-cols-5 gap-2 text-xs">
+                            <div>
+                              <span className="text-muted-foreground">Janela:</span>{" "}
+                              <span className="font-semibold">{w.sent}</span>
+                            </div>
+                            <div>
+                              <span className="text-muted-foreground">Sucesso:</span>{" "}
+                              <span className="font-semibold text-green-600" data-testid={`text-waba-success-${w.wabaId}`}>
+                                {w.success}
+                              </span>
+                              <span className="text-muted-foreground"> ({Math.round(w.successRate * 100)}%)</span>
+                            </div>
+                            <div>
+                              <span className="text-muted-foreground">Erros:</span>{" "}
+                              <span className="font-semibold text-orange-600" data-testid={`text-waba-failed-${w.wabaId}`}>
+                                {w.failed}
+                              </span>
+                              <span className="text-muted-foreground"> ({Math.round(w.errorRate * 100)}%)</span>
+                            </div>
+                            <div>
+                              <span className="text-muted-foreground">Bloqueios:</span>{" "}
+                              <span className="font-semibold text-red-600" data-testid={`text-waba-blocked-${w.wabaId}`}>
+                                {w.blocked}
+                              </span>
+                              <span className="text-muted-foreground"> ({Math.round(w.blockRate * 100)}%)</span>
+                            </div>
+                            <div>
+                              <span className="text-muted-foreground">Total:</span>{" "}
+                              <span className="font-semibold" data-testid={`text-waba-total-${w.wabaId}`}>{w.totalSent}</span>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                    <p className="text-xs text-muted-foreground pt-1">
+                      Score = 0.7·sucesso + 0.2·(1-erro) + 0.1·(1-bloqueio). Rebalanceia a cada 50 mensagens. WABA com score baixo recebe menos tráfego — nunca pausa completamente.
+                    </p>
                   </div>
                 </CardContent>
               </Card>

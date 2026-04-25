@@ -1,0 +1,32 @@
+{
+  "name": "Overdrive V3 - WhatsApp Campaign Engine",
+  "description": "Multi-WABA WhatsApp campaign dispatcher with weighted round-robin scoring.",
+  "stack": "heroku-24",
+  "buildpacks": [
+    { "url": "heroku/nodejs" }
+  ],
+  "env": {
+    "NODE_ENV": {
+      "value": "production"
+    },
+    "NPM_CONFIG_PRODUCTION": {
+      "value": "false",
+      "description": "Install devDependencies so the build (vite + esbuild) can run."
+    },
+    "DATABASE_URL": {
+      "description": "PostgreSQL connection string (Heroku Postgres or external)."
+    },
+    "SESSION_SECRET": {
+      "generator": "secret"
+    }
+  },
+  "formation": {
+    "web": {
+      "quantity": 1,
+      "size": "standard-1x"
+    }
+  },
+  "scripts": {
+    "postdeploy": "echo 'Deploy complete'"
+  }
+}

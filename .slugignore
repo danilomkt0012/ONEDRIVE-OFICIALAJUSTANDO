@@ -1,0 +1,16 @@
+attached_assets
+uploads
+.local
+.cache
+.upm
+.config
+.git
+.replit
+replit.nix
+generated-icon.png
+*.log
+scripts/start_tts.sh
+scripts/install_tts.sh
+server/tts_service
+server/services/tts
+main.py

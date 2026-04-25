@@ -467,6 +467,19 @@ export class UltraStableCampaignSender {
   }
 
   /**
+   * Returns the current per-WABA distribution snapshot for multi-WABA campaigns.
+   * Empty array when this sender's engine is single-WABA.
+   */
+  getWabaDistribution() {
+    return this.engine.getWabaDistribution();
+  }
+
+  /** Returns the underlying campaignId reported by the engine stats. */
+  getCampaignId(): string | undefined {
+    return this.lastStats?.campaignId;
+  }
+
+  /**
    * Retorna estatísticas detalhadas
    */
   getDetailedStats(): DetailedCampaignProgress {
