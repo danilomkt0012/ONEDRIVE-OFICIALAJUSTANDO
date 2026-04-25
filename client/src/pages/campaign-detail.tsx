@@ -49,6 +49,10 @@ import {
   CheckCircle,
   Key,
   Zap,
+  Activity,
+  Gauge,
+  TrendingUp,
+  TrendingDown,
 } from "lucide-react";
 
 const statusConfig: Record<string, { label: string; color: string }> = {
@@ -823,6 +827,172 @@ function BotTabContent({ campaignId, campaign }: { campaignId: string; campaign:
   );
 }
 
+interface SenderHealthItem {
+  phoneNumberId: string;
+  displayNumber?: string;
+  wabaName?: string;
+  score: number;
+  samples: number;
+  qualityRating: string;
+  weightShare: number;
+  weightSharePercent: number;
+  status: 'excelente' | 'bom' | 'regular' | 'atencao' | 'critico';
+}
+
+function statusColor(status: string): string {
+  switch (status) {
+    case 'excelente': return 'bg-green-500';
+    case 'bom': return 'bg-emerald-500';
+    case 'regular': return 'bg-yellow-500';
+    case 'atencao': return 'bg-orange-500';
+    case 'critico': return 'bg-red-500';
+    default: return 'bg-gray-400';
+  }
+}
+
+function statusLabel(status: string): string {
+  switch (status) {
+    case 'excelente': return 'Excelente';
+    case 'bom': return 'Bom';
+    case 'regular': return 'Regular';
+    case 'atencao': return 'Atenção';
+    case 'critico': return 'Crítico';
+    default: return status;
+  }
+}
+
+function qualityColor(q: string): string {
+  switch ((q || '').toUpperCase()) {
+    case 'GREEN': return 'bg-green-100 text-green-700 border-green-200';
+    case 'YELLOW': return 'bg-yellow-100 text-yellow-700 border-yellow-200';
+    case 'RED': return 'bg-red-100 text-red-700 border-red-200';
+    default: return 'bg-gray-100 text-gray-600 border-gray-200';
+  }
+}
+
+function SenderHealthPanel() {
+  const { data, isLoading, refetch } = useQuery<{ numbers: SenderHealthItem[]; totalNumbers: number }>({
+    queryKey: ["/api/dispatch/sender-health"],
+    refetchInterval: 5000,
+  });
+
+  if (isLoading) {
+    return (
+      <Card>
+        <CardContent className="py-12 text-center">
+          <Loader2 className="w-6 h-6 animate-spin mx-auto text-muted-foreground" />
+          <p className="text-sm text-muted-foreground mt-2">Carregando saúde dos números...</p>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  const numbers = data?.numbers || [];
+  if (numbers.length === 0) {
+    return (
+      <Card>
+        <CardContent className="py-12 text-center">
+          <Activity className="w-8 h-8 mx-auto text-muted-foreground/50 mb-2" />
+          <p className="text-sm text-muted-foreground">Nenhum número registrado ainda.</p>
+          <p className="text-xs text-muted-foreground mt-1">Configure uma WABA e registre números na aba <strong>App</strong>.</p>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  const sorted = [...numbers].sort((a, b) => b.score - a.score);
+  const avgScore = sorted.reduce((s, n) => s + n.score, 0) / sorted.length;
+  const totalShare = sorted.reduce((s, n) => s + n.weightSharePercent, 0);
+
+  return (
+    <div className="space-y-4">
+      <Card>
+        <CardHeader className="pb-3">
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle className="text-sm flex items-center gap-2">
+                <Gauge className="w-4 h-4 text-blue-600" />
+                Saúde dos Números (tempo real)
+              </CardTitle>
+              <p className="text-xs text-muted-foreground mt-1">
+                Score médio: <strong>{avgScore.toFixed(0)}/100</strong> · {sorted.length} números ativos · distribuição auto-balanceada
+              </p>
+            </div>
+            <Button variant="ghost" size="sm" onClick={() => refetch()} data-testid="button-refresh-health">
+              <RefreshCw className="w-3.5 h-3.5" />
+            </Button>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-2">
+          {sorted.map((n) => (
+            <div
+              key={n.phoneNumberId}
+              data-testid={`row-sender-${n.phoneNumberId}`}
+              className="flex items-center gap-3 p-3 border rounded-lg hover:bg-muted/30 transition-colors"
+            >
+              <div className={`w-2 h-2 rounded-full flex-shrink-0 ${statusColor(n.status)}`} />
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="font-medium text-sm tabular-nums" data-testid={`text-sender-number-${n.phoneNumberId}`}>
+                    {n.displayNumber || n.phoneNumberId}
+                  </span>
+                  {n.wabaName && (
+                    <span className="text-[10px] text-muted-foreground truncate">· {n.wabaName}</span>
+                  )}
+                  <Badge variant="outline" className={`text-[10px] h-4 px-1.5 ${qualityColor(n.qualityRating)}`}>
+                    {n.qualityRating || 'UNKNOWN'}
+                  </Badge>
+                  <Badge variant="outline" className="text-[10px] h-4 px-1.5">
+                    {statusLabel(n.status)}
+                  </Badge>
+                </div>
+                <div className="flex items-center gap-3 mt-1">
+                  <div className="flex-1 max-w-xs">
+                    <div className="flex items-center justify-between mb-0.5">
+                      <span className="text-[10px] text-muted-foreground">Score</span>
+                      <span className="text-[10px] font-semibold tabular-nums" data-testid={`text-score-${n.phoneNumberId}`}>{n.score}/100</span>
+                    </div>
+                    <div className="h-1.5 bg-gray-200 rounded-full overflow-hidden">
+                      <div
+                        className={`h-full ${statusColor(n.status)} transition-all`}
+                        style={{ width: `${Math.min(100, n.score)}%` }}
+                      />
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <div className="text-[10px] text-muted-foreground">Peso na rotação</div>
+                    <div className="text-sm font-semibold tabular-nums" data-testid={`text-share-${n.phoneNumberId}`}>
+                      {n.weightSharePercent.toFixed(1)}%
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <div className="text-[10px] text-muted-foreground">Amostras</div>
+                    <div className="text-sm font-semibold tabular-nums">{n.samples.toLocaleString("pt-BR")}</div>
+                  </div>
+                </div>
+              </div>
+              {n.score >= 70 ? (
+                <TrendingUp className="w-4 h-4 text-green-600 flex-shrink-0" />
+              ) : n.score < 40 ? (
+                <TrendingDown className="w-4 h-4 text-red-500 flex-shrink-0" />
+              ) : null}
+            </div>
+          ))}
+        </CardContent>
+      </Card>
+
+      <div className="flex items-start gap-2 p-3 rounded-lg bg-blue-50/50 border border-blue-100">
+        <Info className="w-4 h-4 text-blue-600 flex-shrink-0 mt-0.5" />
+        <div className="text-xs text-blue-900 leading-relaxed">
+          <strong>Política em ação:</strong> nenhum número é pausado automaticamente.
+          Quando um cai de qualidade, o peso dele diminui (mínimo 5%) e os outros absorvem o volume.
+          Total atual de pesos: <strong>{totalShare.toFixed(1)}%</strong>.
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function CampaignDetailPage() {
   const [, params] = useRoute("/campaigns/:id");
   const [, navigate] = useLocation();
@@ -1037,9 +1207,26 @@ export default function CampaignDetailPage() {
             <span className="hidden sm:inline">Campanhas</span>
           </Button>
           <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
               <h1 className="text-base sm:text-xl font-bold truncate">{campaign.name}</h1>
               <Badge className={`${status.color} flex-shrink-0`}>{status.label}</Badge>
+              {(campaign as any).dispatchMode && (
+                <Badge
+                  variant="outline"
+                  className={`flex-shrink-0 gap-1 ${
+                    (campaign as any).dispatchMode === 'turbo' ? 'border-orange-300 bg-orange-50 text-orange-700'
+                    : (campaign as any).dispatchMode === 'seguro' ? 'border-green-300 bg-green-50 text-green-700'
+                    : 'border-blue-300 bg-blue-50 text-blue-700'
+                  }`}
+                  data-testid={`badge-dispatch-${(campaign as any).dispatchMode}`}
+                >
+                  {(campaign as any).dispatchMode === 'turbo' ? <Zap className="w-3 h-3" />
+                    : (campaign as any).dispatchMode === 'seguro' ? <Shield className="w-3 h-3" />
+                    : <Gauge className="w-3 h-3" />}
+                  {(campaign as any).dispatchMode === 'turbo' ? 'Turbo'
+                    : (campaign as any).dispatchMode === 'seguro' ? 'Seguro' : 'Equilibrado'}
+                </Badge>
+              )}
             </div>
             {campaign.description && (
               <p className="text-xs sm:text-sm text-muted-foreground truncate">{campaign.description}</p>
