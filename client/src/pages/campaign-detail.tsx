@@ -1073,11 +1073,11 @@ export default function CampaignDetailPage() {
     refetchInterval: 5000,
   });
 
-  const { data: wabaDistData } = useQuery<{ campaignId: string; active: boolean; distribution: Array<{ wabaId: string; sent: number; success: number; failed: number; blocked: number; successRate: number; errorRate: number; blockRate: number; score: number; weight: number; totalSent: number; totalSuccess: number; totalFailed: number; totalBlocked: number; picked: number }> }>({
+  const { data: wabaDistData } = useQuery<{ campaignId: string; active: boolean; globalPressure: number; distribution: Array<{ wabaId: string; sent: number; success: number; failed: number; blocked: number; successRate: number; errorRate: number; blockRate: number; score: number; weight: number; totalSent: number; totalSuccess: number; totalFailed: number; totalBlocked: number; picked: number; avgLatencyMs: number }> }>({
     queryKey: ["/api/campaigns", campaignId, "waba-distribution"],
     queryFn: async () => {
       const res = await fetch(`/api/campaigns/${campaignId}/waba-distribution`);
-      if (!res.ok) return { campaignId: campaignId!, active: false, distribution: [] };
+      if (!res.ok) return { campaignId: campaignId!, active: false, globalPressure: 1, distribution: [] };
       return res.json();
     },
     enabled: !!campaignId && activeTab === "metrics",
@@ -1522,11 +1522,26 @@ export default function CampaignDetailPage() {
             {wabaDistData?.active && wabaDistData.distribution.length > 1 && (
               <Card className="md:col-span-2" data-testid="card-waba-distribution">
                 <CardHeader className="pb-3">
-                  <CardTitle className="text-sm flex items-center justify-between">
+                  <CardTitle className="text-sm flex items-center justify-between flex-wrap gap-2">
                     <span>Distribuição Multi-WABA (Round-Robin Ponderado)</span>
-                    <Badge variant="outline" className="text-xs">
-                      {wabaDistData.distribution.length} WABAs ativos
-                    </Badge>
+                    <div className="flex items-center gap-2">
+                      {(() => {
+                        const gp = wabaDistData.globalPressure ?? 1;
+                        const pct = Math.round(gp * 100);
+                        const color =
+                          gp >= 0.95 ? "bg-green-100 text-green-700 border-green-200" :
+                          gp >= 0.85 ? "bg-yellow-100 text-yellow-700 border-yellow-200" :
+                                       "bg-red-100 text-red-700 border-red-200";
+                        return (
+                          <Badge variant="outline" className={`text-xs ${color}`} data-testid="badge-global-pressure">
+                            Pressão global: {pct}%
+                          </Badge>
+                        );
+                      })()}
+                      <Badge variant="outline" className="text-xs">
+                        {wabaDistData.distribution.length} WABAs ativos
+                      </Badge>
+                    </div>
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
@@ -1566,7 +1581,7 @@ export default function CampaignDetailPage() {
                               style={{ width: `${Math.max(2, sharePct)}%` }}
                             />
                           </div>
-                          <div className="grid grid-cols-2 md:grid-cols-5 gap-2 text-xs">
+                          <div className="grid grid-cols-2 md:grid-cols-6 gap-2 text-xs">
                             <div>
                               <span className="text-muted-foreground">Janela:</span>{" "}
                               <span className="font-semibold">{w.sent}</span>
@@ -1593,6 +1608,20 @@ export default function CampaignDetailPage() {
                               <span className="text-muted-foreground"> ({Math.round(w.blockRate * 100)}%)</span>
                             </div>
                             <div>
+                              <span className="text-muted-foreground">Latência:</span>{" "}
+                              {(() => {
+                                const lat = Math.round(w.avgLatencyMs || 0);
+                                const cls = lat <= 0 ? "text-muted-foreground" :
+                                            lat < 1500 ? "text-green-600" :
+                                            lat < 3000 ? "text-yellow-600" : "text-red-600";
+                                return (
+                                  <span className={`font-semibold ${cls}`} data-testid={`text-waba-latency-${w.wabaId}`}>
+                                    {lat > 0 ? `${lat}ms` : "—"}
+                                  </span>
+                                );
+                              })()}
+                            </div>
+                            <div>
                               <span className="text-muted-foreground">Total:</span>{" "}
                               <span className="font-semibold" data-testid={`text-waba-total-${w.wabaId}`}>{w.totalSent}</span>
                             </div>
@@ -1601,7 +1630,7 @@ export default function CampaignDetailPage() {
                       );
                     })}
                     <p className="text-xs text-muted-foreground pt-1">
-                      Score = 0.7·sucesso + 0.2·(1-erro) + 0.1·(1-bloqueio). Rebalanceia a cada 50 mensagens. WABA com score baixo recebe menos tráfego — nunca pausa completamente.
+                      Score = 0.6·sucesso + 0.25·(1-bloqueio) + 0.15·latência (janela de 50). Rebalanceia a cada 50 mensagens. Bloqueio alto → quarentena suave (peso 2%) sem pausar. Pressão global reduz levemente o ritmo quando latência ou bloqueios sobem.
                     </p>
                   </div>
                 </CardContent>

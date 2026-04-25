@@ -7203,6 +7203,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const campaignId = req.params.id;
       let distribution: any[] = [];
       let active = false;
+      let globalPressure = 1;
 
       for (const engine of activeEngines) {
         if (engine.getCampaignId && engine.getCampaignId() === campaignId) {
@@ -7210,11 +7211,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
           if (engine.getWabaDistribution) {
             distribution = engine.getWabaDistribution() || [];
           }
+          if (engine.getGlobalPressure) {
+            globalPressure = engine.getGlobalPressure();
+          }
           break;
         }
       }
 
-      res.json({ campaignId, active, distribution });
+      res.json({ campaignId, active, distribution, globalPressure });
     } catch (error: any) {
       routeError('getApiCampaignsWabaDistribution', {}, error);
       res.status(500).json({ error: error.message });

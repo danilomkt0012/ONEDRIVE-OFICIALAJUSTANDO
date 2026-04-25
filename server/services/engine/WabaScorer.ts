@@ -26,6 +26,7 @@ export interface WabaDistributionEntry {
   totalFailed: number;
   totalBlocked: number;
   picked: number;     // how many times this WABA was selected by pickWabaIndex
+  avgLatencyMs: number; // rolling average latency (window of 50 samples)
 }
 
 interface WabaState {
@@ -235,6 +236,7 @@ export class WabaScorer {
       const blockRate = n > 0 ? blocked / n : 0;
       const score = this.scoreFor(id);
       const weight = this.weightFor(id);
+      const avgLatencyMs = this.avgLatencyFor(s);
       return {
         wabaId: id,
         sent: n,
@@ -251,6 +253,7 @@ export class WabaScorer {
         totalFailed: s.totalFailed,
         totalBlocked: s.totalBlocked,
         picked: s.picked,
+        avgLatencyMs,
       };
     });
   }

@@ -2424,6 +2424,11 @@ export class UltraStableEngine {
     return this.wabaScorer ? this.wabaScorer.getDistribution() : [];
   }
 
+  /** Aggregate global pressure (0.7–1.0) from the WabaScorer; 1.0 when no scorer. */
+  getGlobalPressure(): number {
+    return this.wabaScorer ? this.wabaScorer.getGlobalPressure() : 1;
+  }
+
   isActive(): boolean {
     return this.isRunning;
   }

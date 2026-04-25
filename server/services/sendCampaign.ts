@@ -474,6 +474,10 @@ export class UltraStableCampaignSender {
     return this.engine.getWabaDistribution();
   }
 
+  getGlobalPressure(): number {
+    return this.engine.getGlobalPressure();
+  }
+
   /** Returns the underlying campaignId reported by the engine stats. */
   getCampaignId(): string | undefined {
     return this.lastStats?.campaignId;

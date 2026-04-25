@@ -9,8 +9,14 @@ uploads
 replit.nix
 generated-icon.png
 *.log
+*.py
+pyproject.toml
+uv.lock
 scripts/start_tts.sh
 scripts/install_tts.sh
 server/tts_service
 server/services/tts
 main.py
+docs
+stressSample
+*.md
