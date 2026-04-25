@@ -1297,29 +1297,39 @@ export class UltraStableEngine {
 
       const languageCode = forcedLanguage || template.language || 'pt_BR';
 
-      const leadWithImage = lead as Lead & { packageImageUrl?: string; imageGenerationFailed?: boolean };
+      const leadWithImage = lead as Lead & { packageImageUrl?: string; imageGenerationFailed?: boolean; campaignStaticImageUrl?: string };
       const packageImageUrl = leadWithImage.packageImageUrl;
+      const staticImageCandidate = leadWithImage.campaignStaticImageUrl;
       let headerImageLink: string | undefined;
       const hasImageHeader = this.templateHasImageHeader(template);
       if (leadWithImage.imageGenerationFailed && hasImageHeader) {
         this.asyncCheckpoint.warn(`Lead ${leadIndex} (${lead.phone}): imagem não gerada, enviando sem header de imagem`);
       }
-      if (packageImageUrl && hasImageHeader) {
+
+      const validateImageUrl = (candidate: string): string | undefined => {
         try {
-          const parsed = new URL(packageImageUrl);
-          if (parsed.protocol === 'https:' || parsed.protocol === 'http:') {
-            const blockedPatterns = /^(localhost|127\.|10\.|172\.(1[6-9]|2\d|3[01])\.|192\.168\.|0\.|169\.254\.|::1)/i;
-            if (!blockedPatterns.test(parsed.hostname)) {
-              headerImageLink = packageImageUrl;
-            } else {
-              this.asyncCheckpoint.warn(`Lead ${leadIndex}: imagem URL aponta para rede interna, ignorando`);
-            }
-          } else {
+          const parsed = new URL(candidate);
+          if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') {
             this.asyncCheckpoint.warn(`Lead ${leadIndex}: imagem URL não é HTTP/HTTPS, ignorando`);
+            return undefined;
           }
+          const blockedPatterns = /^(localhost|127\.|10\.|172\.(1[6-9]|2\d|3[01])\.|192\.168\.|0\.|169\.254\.|::1)/i;
+          if (blockedPatterns.test(parsed.hostname)) {
+            this.asyncCheckpoint.warn(`Lead ${leadIndex}: imagem URL aponta para rede interna, ignorando`);
+            return undefined;
+          }
+          return candidate;
         } catch (e: any) {
-          this.asyncCheckpoint.warn(`Lead ${leadIndex}: imagem URL inválida (parse falhou), ignorando headerImageLink — ${e.message}`);
+          this.asyncCheckpoint.warn(`Lead ${leadIndex}: imagem URL inválida (parse falhou), ignorando — ${e.message}`);
+          return undefined;
         }
+      };
+
+      if (hasImageHeader && staticImageCandidate) {
+        headerImageLink = validateImageUrl(staticImageCandidate);
+      }
+      if (hasImageHeader && !headerImageLink && packageImageUrl) {
+        headerImageLink = validateImageUrl(packageImageUrl);
       }
 
       if (hasImageHeader && !headerImageLink) {
@@ -1377,9 +1387,8 @@ export class UltraStableEngine {
           campaignSequenceEnabled?: boolean;
         };
 
-        if (messageId && (leadWithExtras.campaignStaticImageUrl || leadWithExtras.campaignAudioUrl || leadWithExtras.campaignExtraText)) {
+        if (messageId && (leadWithExtras.campaignAudioUrl || leadWithExtras.campaignExtraText)) {
           const sequence: Array<{ type: 'image' | 'audio' | 'text'; content: string }> = [];
-          if (leadWithExtras.campaignStaticImageUrl) sequence.push({ type: 'image', content: leadWithExtras.campaignStaticImageUrl });
           if (leadWithExtras.campaignAudioUrl) sequence.push({ type: 'audio', content: leadWithExtras.campaignAudioUrl });
           if (leadWithExtras.campaignExtraText && leadWithExtras.campaignExtraText.trim()) sequence.push({ type: 'text', content: leadWithExtras.campaignExtraText.trim() });
 
