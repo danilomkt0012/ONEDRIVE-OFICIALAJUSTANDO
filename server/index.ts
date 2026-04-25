@@ -539,11 +539,16 @@ async function verifyWebhookOnStartup(port: number) {
     process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
     process.on('SIGINT', () => gracefulShutdown('SIGINT'));
 
-    server.listen({
-      port,
-      host: "0.0.0.0",
-      reusePort: true,
-    }, () => {
+    server.on('error', (err: any) => {
+      log(`[FATAL] HTTP server error: ${err?.code || ''} ${err?.message || err}`);
+      logError('server.listen', { port }, err);
+      process.exit(1);
+    });
+
+    const listenOpts: any = { port, host: "0.0.0.0" };
+    if (!isProduction) listenOpts.reusePort = true;
+
+    server.listen(listenOpts, () => {
       log(`serving on port ${port}`);
 
       try { startDailyResetJob(); } catch (err: any) {
