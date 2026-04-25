@@ -29,7 +29,7 @@ import crypto from 'crypto';
 import type { Lead } from "@shared/schema";
 import { campaignErrorLogs, messageDeliveries } from "@shared/schema";
 import { db } from "../../db";
-import { sendTemplateMessage, sendTemplateWithButtons, sendAudioMessage } from "../../meta/metaAPI";
+import { sendTemplateMessage, sendTemplateWithButtons, sendAudioMessage, sendImageMessage, metaAPI } from "../../meta/metaAPI";
 import { TokenBucket } from './TokenBucket';
 import { SlidingWindow } from './SlidingWindow';
 import type { CircuitState } from './CircuitBreaker';
@@ -1370,13 +1370,46 @@ export class UltraStableEngine {
         const rttMs = Date.now() - startTime;
         const messageId = response?.messages?.[0]?.id;
 
-        const leadWithAudio = lead as Lead & { campaignAudioUrl?: string };
-        if (leadWithAudio.campaignAudioUrl && messageId) {
-          try {
-            await new Promise(resolve => setTimeout(resolve, 1000 + crypto.randomInt(0, 2000)));
-            await sendAudioMessage(phoneNumberId, formattedPhone, leadWithAudio.campaignAudioUrl, metaToken);
-          } catch (audioErr: any) {
-            this.asyncCheckpoint.warn(`Lead ${leadIndex}: falha ao enviar áudio da campanha: ${audioErr.message}`);
+        const leadWithExtras = lead as Lead & {
+          campaignAudioUrl?: string;
+          campaignStaticImageUrl?: string;
+          campaignExtraText?: string;
+          campaignSequenceEnabled?: boolean;
+        };
+
+        if (messageId && (leadWithExtras.campaignStaticImageUrl || leadWithExtras.campaignAudioUrl || leadWithExtras.campaignExtraText)) {
+          const sequence: Array<{ type: 'image' | 'audio' | 'text'; content: string }> = [];
+          if (leadWithExtras.campaignStaticImageUrl) sequence.push({ type: 'image', content: leadWithExtras.campaignStaticImageUrl });
+          if (leadWithExtras.campaignAudioUrl) sequence.push({ type: 'audio', content: leadWithExtras.campaignAudioUrl });
+          if (leadWithExtras.campaignExtraText && leadWithExtras.campaignExtraText.trim()) sequence.push({ type: 'text', content: leadWithExtras.campaignExtraText.trim() });
+
+          for (let i = 0; i < sequence.length; i++) {
+            const item = sequence[i];
+            const delayMs = 500 + crypto.randomInt(0, 1001);
+            await new Promise(resolve => setTimeout(resolve, delayMs));
+
+            const trySend = async (): Promise<void> => {
+              if (item.type === 'image') {
+                await sendImageMessage(phoneNumberId, formattedPhone, item.content, undefined, metaToken);
+              } else if (item.type === 'audio') {
+                await sendAudioMessage(phoneNumberId, formattedPhone, item.content, metaToken);
+              } else {
+                await metaAPI.sendFreeFormMessage(phoneNumberId, formattedPhone, item.content, metaToken);
+              }
+            };
+
+            try {
+              await trySend();
+            } catch (firstErr: any) {
+              this.asyncCheckpoint.warn(`Lead ${leadIndex}: ${item.type} falhou (1ª tentativa): ${firstErr.message}. Tentando novamente em 800ms...`);
+              try {
+                await new Promise(resolve => setTimeout(resolve, 800));
+                await trySend();
+              } catch (secondErr: any) {
+                logError(`UltraStableEngine.sequence.${item.type}`, { leadIndex, phone: formattedPhone, content: item.content.substring(0, 80) }, secondErr);
+                this.asyncCheckpoint.warn(`Lead ${leadIndex}: ${item.type} falhou definitivamente: ${secondErr.message}`);
+              }
+            }
           }
         }
 

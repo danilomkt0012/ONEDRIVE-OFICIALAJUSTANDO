@@ -102,6 +102,12 @@ export default function CampaignWizardPage() {
   const [campaignAudioUrl, setCampaignAudioUrl] = useState("");
   const [campaignAudioEnabled, setCampaignAudioEnabled] = useState(false);
 
+  const [staticImageEnabled, setStaticImageEnabled] = useState(false);
+  const [staticImageUrl, setStaticImageUrl] = useState("");
+  const [extraTextEnabled, setExtraTextEnabled] = useState(false);
+  const [extraTextMessage, setExtraTextMessage] = useState("");
+  const [sequenceEnabled, setSequenceEnabled] = useState(false);
+
   const [firstResponseButtons, setFirstResponseButtons] = useState<Array<{ id: string; title: string; nextNodeId?: string }>>([]);
   const [firstResponseBodyText, setFirstResponseBodyText] = useState("Selecione uma opção:");
 
@@ -739,6 +745,11 @@ export default function CampaignWizardPage() {
         if (campCfg.rotationMode) setRotationMode(campCfg.rotationMode);
         if (campCfg.campaignAudioEnabled) setCampaignAudioEnabled(true);
         if (campCfg.campaignAudioUrl) setCampaignAudioUrl(campCfg.campaignAudioUrl);
+        if (campCfg.staticImageEnabled) setStaticImageEnabled(true);
+        if (campCfg.staticImageUrl) setStaticImageUrl(campCfg.staticImageUrl);
+        if (campCfg.extraTextEnabled) setExtraTextEnabled(true);
+        if (campCfg.extraTextMessage) setExtraTextMessage(campCfg.extraTextMessage);
+        if (campCfg.sequenceEnabled) setSequenceEnabled(true);
         if (Array.isArray(campCfg.firstResponseButtons)) setFirstResponseButtons(campCfg.firstResponseButtons);
         if (campCfg.firstResponseBodyText) setFirstResponseBodyText(campCfg.firstResponseBodyText);
       }
@@ -938,6 +949,11 @@ export default function CampaignWizardPage() {
             customImageTemplateId: usePackageImage ? customImageTemplateId : null,
             campaignAudioEnabled,
             campaignAudioUrl: campaignAudioEnabled ? campaignAudioUrl : null,
+            sequenceEnabled,
+            staticImageEnabled,
+            staticImageUrl: staticImageEnabled ? staticImageUrl : null,
+            extraTextEnabled,
+            extraTextMessage: extraTextEnabled ? extraTextMessage : null,
           },
         });
         if (usePackageImage && customImageTemplateId && editorFields.length > 0) {
@@ -1414,6 +1430,11 @@ export default function CampaignWizardPage() {
                   scheduledAt={scheduledAt} setScheduledAt={setScheduledAt}
                   campaignAudioEnabled={campaignAudioEnabled} setCampaignAudioEnabled={setCampaignAudioEnabled}
                   campaignAudioUrl={campaignAudioUrl} setCampaignAudioUrl={setCampaignAudioUrl}
+                  staticImageEnabled={staticImageEnabled} setStaticImageEnabled={setStaticImageEnabled}
+                  staticImageUrl={staticImageUrl} setStaticImageUrl={setStaticImageUrl}
+                  extraTextEnabled={extraTextEnabled} setExtraTextEnabled={setExtraTextEnabled}
+                  extraTextMessage={extraTextMessage} setExtraTextMessage={setExtraTextMessage}
+                  sequenceEnabled={sequenceEnabled} setSequenceEnabled={setSequenceEnabled}
                   dispatchMode={dispatchMode}
                   setDispatchMode={setDispatchMode}
                   estimatedLeads={(directLeads.length || (selectedLeadList?.validLeads ?? selectedLeadList?.totalLeads ?? 2000))}

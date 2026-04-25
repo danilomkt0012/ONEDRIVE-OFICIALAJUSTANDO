@@ -1563,6 +1563,45 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // POST: upload de imagem ESTÁTICA da campanha (mesma imagem para todos os leads)
+  app.post("/api/campaigns/upload-static-image", chatMediaUpload.single("image"), async (req, res) => {
+    try {
+      if (!req.file) return res.status(400).json({ error: "Imagem obrigatória (campo 'image')" });
+      const mime = (req.file.mimetype || "").toLowerCase();
+      if (!mime.startsWith("image/")) {
+        try { await fs.promises.unlink(req.file.path); } catch {}
+        return res.status(400).json({ error: `MIME inválido: ${mime}. Use image/jpeg, image/png ou image/webp.` });
+      }
+      const publicDomain = getPublicDomain();
+      const url = `${publicDomain}/uploads/chat-media/${req.file.filename}`;
+      console.log(`[CAMPAIGN_MEDIA] static-image uploaded: ${url} mime=${mime} size=${req.file.size}`);
+      res.json({ url, filename: req.file.filename, mime, size: req.file.size });
+    } catch (error: any) {
+      routeError('postCampaignStaticImage', {}, error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // POST: upload de áudio ESTÁTICO da campanha (mesmo áudio para todos os leads)
+  app.post("/api/campaigns/upload-static-audio", chatMediaUpload.single("audio"), async (req, res) => {
+    try {
+      if (!req.file) return res.status(400).json({ error: "Áudio obrigatório (campo 'audio')" });
+      const mime = (req.file.mimetype || "").toLowerCase();
+      const allowed = ["audio/mpeg", "audio/mp3", "audio/ogg", "audio/opus", "audio/aac", "audio/mp4", "audio/amr"];
+      if (!allowed.some(a => mime.startsWith(a))) {
+        try { await fs.promises.unlink(req.file.path); } catch {}
+        return res.status(400).json({ error: `MIME inválido: ${mime}. Use audio/mpeg ou audio/ogg.` });
+      }
+      const publicDomain = getPublicDomain();
+      const url = `${publicDomain}/uploads/chat-media/${req.file.filename}`;
+      console.log(`[CAMPAIGN_MEDIA] static-audio uploaded: ${url} mime=${mime} size=${req.file.size}`);
+      res.json({ url, filename: req.file.filename, mime, size: req.file.size });
+    } catch (error: any) {
+      routeError('postCampaignStaticAudio', {}, error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
   const TEMPLATE_IMAGES_DIR = path.join(__dirname_routes, '../uploads/template-base-images');
   fs.promises.mkdir(TEMPLATE_IMAGES_DIR, { recursive: true }).catch((e: any) => {
     logError('routes.mkdirTemplateImagesDir', { path: TEMPLATE_IMAGES_DIR }, e);
@@ -8931,6 +8970,23 @@ async function executeParallelCampaign(campaignId: string, batchingRate?: number
       for (const lead of leads) {
         (lead as any).campaignAudioUrl = campConfig.campaignAudioUrl;
       }
+    }
+
+    // ── MENSAGENS EM SEQUÊNCIA (imagem estática + texto extra) ─────────────
+    const sequenceEnabled = campConfig.sequenceEnabled === true;
+    const staticImageUrl = (campConfig.staticImageEnabled && typeof campConfig.staticImageUrl === 'string' && campConfig.staticImageUrl.trim())
+      ? campConfig.staticImageUrl.trim() : null;
+    const extraText = (campConfig.extraTextEnabled && typeof campConfig.extraTextMessage === 'string' && campConfig.extraTextMessage.trim())
+      ? campConfig.extraTextMessage.trim() : null;
+    if (sequenceEnabled && (staticImageUrl || extraText)) {
+      console.log(`   🧩 Sequência ativada: image=${!!staticImageUrl} audio=${!!campConfig.campaignAudioUrl} text=${!!extraText}`);
+      for (const lead of leads) {
+        (lead as any).campaignSequenceEnabled = true;
+        if (staticImageUrl) (lead as any).campaignStaticImageUrl = staticImageUrl;
+        if (extraText) (lead as any).campaignExtraText = extraText;
+      }
+    } else if (staticImageUrl || extraText) {
+      console.log(`   ℹ️ Mídia adicional configurada mas "Enviar em sequência" desativado — não será enviada.`);
     }
 
     // ── PRÉ-GERAÇÃO DE IMAGENS DO PACOTE ──────────────────────────────────

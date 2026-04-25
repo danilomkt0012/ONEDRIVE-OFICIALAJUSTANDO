@@ -7,8 +7,11 @@ import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { Activity, Calendar, Clock, Music, Info, Zap, Shield, Gauge, Timer } from "lucide-react";
+import { Activity, Calendar, Clock, Music, Info, Zap, Shield, Gauge, Timer, Image as ImageIcon, MessageSquare, Upload, Layers } from "lucide-react";
 import AudioRecorder from "@/components/AudioRecorder";
+import { Textarea } from "@/components/ui/textarea";
+import { useToast } from "@/hooks/use-toast";
+import { useRef } from "react";
 
 interface EtaResponse {
   selected: { mode: string; label: string; etaMinutes: number; effectiveRate: number; msgsPerHour: number; description: string };
@@ -34,6 +37,16 @@ interface Step8StrategyProps {
   setCampaignAudioEnabled: (v: boolean) => void;
   campaignAudioUrl: string;
   setCampaignAudioUrl: (v: string) => void;
+  staticImageEnabled?: boolean;
+  setStaticImageEnabled?: (v: boolean) => void;
+  staticImageUrl?: string;
+  setStaticImageUrl?: (v: string) => void;
+  extraTextEnabled?: boolean;
+  setExtraTextEnabled?: (v: boolean) => void;
+  extraTextMessage?: string;
+  setExtraTextMessage?: (v: string) => void;
+  sequenceEnabled?: boolean;
+  setSequenceEnabled?: (v: boolean) => void;
   dispatchMode?: string;
   setDispatchMode?: (v: string) => void;
   estimatedLeads?: number;
@@ -54,12 +67,39 @@ export default function Step8Strategy({
   scheduledAt, setScheduledAt,
   campaignAudioEnabled, setCampaignAudioEnabled,
   campaignAudioUrl, setCampaignAudioUrl,
+  staticImageEnabled = false, setStaticImageEnabled,
+  staticImageUrl = "", setStaticImageUrl,
+  extraTextEnabled = false, setExtraTextEnabled,
+  extraTextMessage = "", setExtraTextMessage,
+  sequenceEnabled = false, setSequenceEnabled,
   dispatchMode = "equilibrado",
   setDispatchMode,
   estimatedLeads = 2000,
   estimatedNumbers = 1,
 }: Step8StrategyProps) {
   const [selectedMode, setSelectedMode] = useState<string>(dispatchMode);
+  const { toast } = useToast();
+  const imageInputRef = useRef<HTMLInputElement>(null);
+  const [imageUploading, setImageUploading] = useState(false);
+
+  const handleImageUpload = async (file: File) => {
+    setImageUploading(true);
+    try {
+      const fd = new FormData();
+      fd.append("image", file);
+      const res = await fetch("/api/campaigns/upload-static-image", { method: "POST", body: fd, credentials: "include" });
+      const data = await res.json();
+      if (!res.ok || !data?.url) throw new Error(data?.error || "Falha no upload");
+      setStaticImageUrl?.(data.url);
+      setStaticImageEnabled?.(true);
+      toast({ title: "Imagem carregada", description: "A mesma imagem será enviada para todos os leads." });
+    } catch (err: any) {
+      toast({ title: "Erro no upload", description: err.message || "Falha ao enviar imagem", variant: "destructive" });
+    } finally {
+      setImageUploading(false);
+      if (imageInputRef.current) imageInputRef.current.value = "";
+    }
+  };
 
   useEffect(() => {
     setSelectedMode(dispatchMode);
@@ -238,6 +278,111 @@ export default function Step8Strategy({
         </div>
       )}
 
+      {/* Mensagens em sequência (imagem + áudio + texto) */}
+      <div className="border-t pt-4 space-y-3">
+        <div className="flex items-center justify-between p-4 border-2 border-blue-200 rounded-xl bg-blue-50/40">
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 rounded-lg bg-blue-100 flex items-center justify-center">
+              <Layers className="w-4 h-4 text-blue-600" />
+            </div>
+            <div>
+              <h3 className="font-semibold text-sm">Enviar mensagens em sequência</h3>
+              <p className="text-xs text-muted-foreground">Após o template, envia imagem → áudio → texto, sem esperar resposta. Atraso 500–1500ms entre cada uma.</p>
+            </div>
+          </div>
+          <Switch checked={sequenceEnabled} onCheckedChange={(v) => setSequenceEnabled?.(v)} data-testid="switch-sequence-enabled" />
+        </div>
+
+        {sequenceEnabled && (
+          <>
+            {/* Imagem estática (mesma para todos os leads) */}
+            <div className="flex items-center justify-between p-4 border rounded-xl bg-muted/20">
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 rounded-lg bg-emerald-100 flex items-center justify-center">
+                  <ImageIcon className="w-4 h-4 text-emerald-600" />
+                </div>
+                <div>
+                  <h3 className="font-semibold text-sm">Imagem da Campanha (mesma para todos)</h3>
+                  <p className="text-xs text-muted-foreground">Faça upload de uma imagem ou cole uma URL pública. A mesma imagem é enviada para cada lead.</p>
+                </div>
+              </div>
+              <Switch checked={staticImageEnabled} onCheckedChange={(v) => setStaticImageEnabled?.(v)} data-testid="switch-static-image" />
+            </div>
+            {staticImageEnabled && (
+              <div className="space-y-3 pl-4">
+                <div className="flex gap-2 items-end">
+                  <div className="flex-1">
+                    <Label className="text-xs">URL da Imagem</Label>
+                    <Input
+                      value={staticImageUrl}
+                      onChange={(e) => setStaticImageUrl?.(e.target.value)}
+                      placeholder="https://exemplo.com/imagem.jpg"
+                      className="h-8 text-sm"
+                      data-testid="input-static-image-url"
+                    />
+                  </div>
+                  <input
+                    ref={imageInputRef}
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={(e) => { const f = e.target.files?.[0]; if (f) handleImageUpload(f); }}
+                    data-testid="input-file-static-image"
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => imageInputRef.current?.click()}
+                    disabled={imageUploading}
+                    data-testid="button-upload-static-image"
+                  >
+                    <Upload className="w-3 h-3 mr-1" />
+                    {imageUploading ? "Enviando..." : "Upload"}
+                  </Button>
+                </div>
+                {staticImageUrl && (
+                  <div className="flex items-center gap-2 bg-muted/30 p-2 rounded-lg">
+                    <img src={staticImageUrl} alt="preview" className="h-12 w-12 rounded object-cover" />
+                    <span className="flex-1 text-xs text-muted-foreground truncate">{staticImageUrl}</span>
+                    <Button variant="ghost" size="sm" className="h-6 px-2 text-xs text-red-500" onClick={() => setStaticImageUrl?.("")} data-testid="button-remove-static-image">
+                      Remover
+                    </Button>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Texto extra após mídia */}
+            <div className="flex items-center justify-between p-4 border rounded-xl bg-muted/20">
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 rounded-lg bg-amber-100 flex items-center justify-center">
+                  <MessageSquare className="w-4 h-4 text-amber-600" />
+                </div>
+                <div>
+                  <h3 className="font-semibold text-sm">Mensagem de texto extra (opcional)</h3>
+                  <p className="text-xs text-muted-foreground">Texto enviado depois da mídia, na mesma sequência.</p>
+                </div>
+              </div>
+              <Switch checked={extraTextEnabled} onCheckedChange={(v) => setExtraTextEnabled?.(v)} data-testid="switch-extra-text" />
+            </div>
+            {extraTextEnabled && (
+              <div className="pl-4">
+                <Textarea
+                  value={extraTextMessage}
+                  onChange={(e) => setExtraTextMessage?.(e.target.value)}
+                  placeholder="Ex.: Olá! Estamos com uma oferta especial para você..."
+                  rows={3}
+                  className="text-sm"
+                  data-testid="textarea-extra-text"
+                />
+                <p className="text-[10px] text-muted-foreground mt-1">Máx. ~4096 caracteres. Atualmente: {extraTextMessage.length}.</p>
+              </div>
+            )}
+          </>
+        )}
+      </div>
+
       <div className="border-t pt-4 space-y-3">
         <div className="flex items-center justify-between p-4 border rounded-xl bg-muted/20 hover:bg-muted/30 transition-colors">
           <div className="flex items-center gap-3">
@@ -246,7 +391,7 @@ export default function Step8Strategy({
             </div>
             <div>
               <h3 className="font-semibold text-sm">Áudio da Campanha (opcional)</h3>
-              <p className="text-xs text-muted-foreground">Grave ou informe um áudio para enviar junto com a campanha</p>
+              <p className="text-xs text-muted-foreground">Grave ou informe um áudio. Será enviado dentro da sequência se "Enviar em sequência" estiver ativado.</p>
             </div>
           </div>
           <Switch checked={campaignAudioEnabled} onCheckedChange={setCampaignAudioEnabled} data-testid="switch-campaign-audio" />
