@@ -536,9 +536,46 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: "WABA ID e Access Token são obrigatórios" });
       }
 
-      const phones = await metaAPI.getPhoneNumbers(wabaId, accessToken);
-      console.log(`✅ [WABA Validate] WABA ${wabaId} → ${phones.length} números encontrados`);
-      res.json({ success: true, wabaId, phoneCount: phones.length, phones });
+      try {
+        const phones = await metaAPI.getPhoneNumbers(wabaId, accessToken);
+        console.log(`✅ [WABA Validate] WABA ${wabaId} → ${phones.length} números encontrados`);
+        return res.json({ success: true, wabaId, phoneCount: phones.length, phones });
+      } catch (primaryError: any) {
+        const code = primaryError?.errorCode ?? primaryError?.code;
+        const status = primaryError?.httpStatus ?? primaryError?.statusCode;
+        const looksLikePermissionError = code === 100 || status === 400 || status === 403;
+
+        if (looksLikePermissionError) {
+          try {
+            const wabas = await metaAPI.discoverAllWabasFromBM(String(wabaId), accessToken);
+            if (Array.isArray(wabas) && wabas.length > 0) {
+              console.log(`✅ [WABA Validate] Fallback: ID ${wabaId} é BM, ${wabas.length} WABA(s) encontrada(s)`);
+              return res.json({
+                success: true,
+                isBmId: true,
+                bmId: String(wabaId),
+                wabas,
+                message: `O ID informado é um Business Manager. Foram encontradas ${wabas.length} WABA(s) dentro dele — selecione a desejada para cadastrar.`,
+              });
+            }
+          } catch {
+          }
+
+          return res.status(400).json({
+            error: "Não foi possível validar este ID na Meta.",
+            details: "A Meta retornou erro de permissão ou ID inexistente. Verifique:",
+            checks: [
+              "1) O ID informado é mesmo o WABA ID (e não o Business Manager ID, App ID ou Phone Number ID).",
+              "2) O Access Token tem o escopo 'whatsapp_business_management' (e 'business_management' se for token de System User).",
+              "3) O usuário/System User do token é admin do Business Manager dono dessa WABA.",
+              "4) A WABA está ativa e não foi removida ou migrada para outro BM.",
+            ],
+            metaError: primaryError?.message,
+          });
+        }
+
+        throw primaryError;
+      }
     } catch (error: any) {
       routeError('Error validating WABA by ID:', {}, error);
       const statusCode = error.statusCode || 400;
