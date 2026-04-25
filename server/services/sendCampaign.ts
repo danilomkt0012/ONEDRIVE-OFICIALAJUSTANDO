@@ -75,16 +75,16 @@ export const SPEED_PRESETS: Record<SendSpeedMode, SpeedPreset> = {
     burstMultiplier: 1.0,
   },
   NORMAL: {
-    initialRate: 1.1,
-    maxRate: 1.1,
-    maxConcurrentRequests: 3,
+    initialRate: 1.4,
+    maxRate: 1.4,
+    maxConcurrentRequests: 5,
     targetRttMs: 300,
     burstMultiplier: 1.0,
   },
   FAST: {
-    initialRate: 1.3,
-    maxRate: 1.3,
-    maxConcurrentRequests: 4,
+    initialRate: 1.5,
+    maxRate: 1.5,
+    maxConcurrentRequests: 6,
     targetRttMs: 250,
     burstMultiplier: 1.0,
   },
@@ -253,8 +253,8 @@ export class UltraStableCampaignSender {
       ...(Object.keys(templateCategories).length > 0 ? { templateCategories } : {}),
     };
 
-    const safeRate = hardRate ? Math.min(hardRate, 1.3) : preset.initialRate;
-    const safeMaxRate = hardRate ? Math.min(hardRate, 1.3) : preset.maxRate;
+    const safeRate = hardRate ? Math.min(hardRate, 1.5) : preset.initialRate;
+    const safeMaxRate = hardRate ? Math.min(hardRate, 1.5) : preset.maxRate;
     const safeConcurrency = hardRate ? Math.min(8, Math.max(2, Math.ceil(hardRate * 3))) : preset.maxConcurrentRequests;
 
     if (hardRate) {
@@ -288,9 +288,9 @@ export class UltraStableCampaignSender {
       templateWeights,
       humanBehavior: humanBehaviorConfig,
       enableMicroBatching: true,
-      microBatchSize: 300,
-      microBatchPauseMinMs: 10000,
-      microBatchPauseMaxMs: 25000,
+      microBatchSize: 450,
+      microBatchPauseMinMs: 5000,
+      microBatchPauseMaxMs: 10000,
       wabaConfigs: config.wabaConfigs || [],
       deliveryRateAutoPauseThreshold: config.deliveryRateAutoPauseThreshold ?? 0.5,
       deliveryRateReduceThreshold: config.deliveryRateReduceThreshold ?? 0.6,
