@@ -9,7 +9,7 @@ packages = ["libsndfile"]
 [deployment]
 deploymentTarget = "autoscale"
 build = ["npm", "run", "build"]
-run = ["bash", "-c", "NODE_ENV=production node dist/index.js"]
+run = ["node", "./dist/index.cjs"]
 
 [env]
 PORT = "5000"
