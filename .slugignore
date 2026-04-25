@@ -9,9 +9,11 @@ uploads
 replit.nix
 generated-icon.png
 *.log
+.pythonlibs
 *.py
 pyproject.toml
 uv.lock
+requirements.txt
 scripts/start_tts.sh
 scripts/install_tts.sh
 server/tts_service
