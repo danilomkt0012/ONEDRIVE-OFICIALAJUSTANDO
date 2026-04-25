@@ -1582,20 +1582,68 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // POST: upload de áudio ESTÁTICO da campanha (mesmo áudio para todos os leads)
+  // POST: upload de áudio ESTÁTICO da campanha (mesmo áudio para todos os leads).
+  // Aceita qualquer áudio do navegador (webm, mp3, mp4, ogg, etc.) e transcodifica para OGG/Opus
+  // — formato exigido pelo WhatsApp Cloud API para voice notes.
   app.post("/api/campaigns/upload-static-audio", chatMediaUpload.single("audio"), async (req, res) => {
     try {
       if (!req.file) return res.status(400).json({ error: "Áudio obrigatório (campo 'audio')" });
-      const mime = (req.file.mimetype || "").toLowerCase();
-      const allowed = ["audio/mpeg", "audio/mp3", "audio/ogg", "audio/opus", "audio/aac", "audio/mp4", "audio/amr"];
-      if (!allowed.some(a => mime.startsWith(a))) {
+      const audioMime = (req.file.mimetype || "").toLowerCase();
+      const isAudioLike = audioMime.startsWith("audio/") || audioMime === "video/webm";
+      if (!isAudioLike) {
         try { await fs.promises.unlink(req.file.path); } catch {}
-        return res.status(400).json({ error: `MIME inválido: ${mime}. Use audio/mpeg ou audio/ogg.` });
+        return res.status(400).json({ error: `MIME inválido: ${audioMime}. Envie um arquivo de áudio.` });
       }
+
+      const nameExt = path.extname(req.file.originalname || req.file.filename).toLowerCase();
+      const NATIVE_EXTS = new Set([".ogg", ".mp3", ".aac", ".m4a", ".amr"]);
+      const TRANS_EXTS = new Set([".webm", ".wav", ".mp4", ".opus", ".oga"]);
+      const knownExts = new Set([...NATIVE_EXTS, ...TRANS_EXTS]);
+      const originalExt = (nameExt && knownExts.has(nameExt)) ? nameExt : (typeof mimeToExt === "function" ? (mimeToExt(audioMime) || nameExt) : nameExt);
+      const isWebm = originalExt === ".webm" || audioMime === "audio/webm" || audioMime === "video/webm";
+      const needsTranscode = TRANS_EXTS.has(originalExt) || (!NATIVE_EXTS.has(originalExt) && !TRANS_EXTS.has(originalExt));
+
+      let finalFilename = req.file.filename;
+      if (needsTranscode) {
+        const fileExt = nameExt || path.extname(req.file.filename);
+        const baseName = path.basename(req.file.filename, fileExt);
+        finalFilename = `${baseName}.ogg`;
+        const outputPath = path.join(CHAT_MEDIA_DIR, finalFilename);
+
+        const ffmpegOk = await isFfmpegAvailable();
+        if (!ffmpegOk) {
+          fs.promises.unlink(req.file.path).catch(() => {});
+          return res.status(500).json({ error: "ffmpeg não disponível para converter áudio para OGG/Opus." });
+        }
+
+        try {
+          await new Promise<void>((resolve, reject) => {
+            const cmd = ffmpeg(req.file!.path)
+              .audioCodec("libopus")
+              .audioBitrate("64k")
+              .audioChannels(1)
+              .audioFrequency(48000)
+              .format("ogg")
+              .save(outputPath)
+              .on("end", () => resolve())
+              .on("error", (err: Error) => reject(err));
+            if (isWebm) {
+              cmd.inputFormat("webm");
+            }
+          });
+        } catch (transcodeErr: unknown) {
+          fs.promises.unlink(req.file.path).catch(() => {});
+          routeError('postCampaignStaticAudio.transcode', { originalExt, audioMime }, transcodeErr);
+          const msg = transcodeErr instanceof Error ? transcodeErr.message : "Erro desconhecido";
+          return res.status(500).json({ error: `Falha ao converter áudio para OGG/Opus: ${msg}` });
+        }
+        fs.promises.unlink(req.file.path).catch(() => {});
+      }
+
       const publicDomain = getPublicDomain();
-      const url = `${publicDomain}/uploads/chat-media/${req.file.filename}`;
-      console.log(`[CAMPAIGN_MEDIA] static-audio uploaded: ${url} mime=${mime} size=${req.file.size}`);
-      res.json({ url, filename: req.file.filename, mime, size: req.file.size });
+      const url = `${publicDomain}/uploads/chat-media/${finalFilename}`;
+      console.log(`[CAMPAIGN_MEDIA] static-audio uploaded: ${url} originalMime=${audioMime} transcoded=${needsTranscode} finalFilename=${finalFilename}`);
+      res.json({ url, filename: finalFilename, mime: needsTranscode ? "audio/ogg" : audioMime, size: req.file.size });
     } catch (error: any) {
       routeError('postCampaignStaticAudio', {}, error);
       res.status(500).json({ error: error.message });

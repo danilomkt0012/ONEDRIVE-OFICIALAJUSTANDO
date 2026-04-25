@@ -30,6 +30,9 @@ import type { Lead } from "@shared/schema";
 import { campaignErrorLogs, messageDeliveries } from "@shared/schema";
 import { db } from "../../db";
 import { sendTemplateMessage, sendTemplateWithButtons, sendAudioMessage, sendImageMessage, metaAPI } from "../../meta/metaAPI";
+import { fetchAudioBuffer } from "../../utils/ssrfGuard";
+import { detectAudioFormat, isFfmpegAvailable, convertBufferToOgg } from "../../utils/audioConverter";
+import path from "path";
 import { TokenBucket } from './TokenBucket';
 import { SlidingWindow } from './SlidingWindow';
 import type { CircuitState } from './CircuitBreaker';
@@ -298,6 +301,8 @@ export class UltraStableEngine {
   private ownsDecisionEngine: boolean = false;
   private messageTemplateMap: Map<string, string> = new Map();
   private portfolioBmId: string | null = null;
+  private audioMediaIdCache: Map<string, string> = new Map();
+  private audioPrepareInflight: Map<string, Promise<string>> = new Map();
   
   private onProgressCallback?: (stats: UltraStableStats) => void;
   private onSendResultCallback?: (result: { success: boolean; phone: string; error?: string; errorType?: string; isMetaBlocked?: boolean; isRetry?: boolean }) => void;
@@ -1257,6 +1262,62 @@ export class UltraStableEngine {
     return template.components.some((c: any) => c.type === 'HEADER' && c.format === 'IMAGE');
   }
 
+  /**
+   * Resolve audio URL → Meta media_id (cached per phoneNumberId+url).
+   * Downloads the audio, converts to OGG/Opus if needed (via ffmpeg), uploads to Meta,
+   * and returns a media_id ready to be sent as a voice note.
+   * Concurrent calls for the same key share a single in-flight promise (no duplicate work).
+   */
+  private async getOrPrepareAudioMediaId(
+    audioUrl: string,
+    phoneNumberId: string,
+    metaToken: string
+  ): Promise<string> {
+    const cacheKey = `${phoneNumberId}::${audioUrl}`;
+    const cached = this.audioMediaIdCache.get(cacheKey);
+    if (cached) return cached;
+
+    const inflight = this.audioPrepareInflight.get(cacheKey);
+    if (inflight) return inflight;
+
+    const job = (async () => {
+      const { buffer: rawBuffer, mimeType: rawMime, filename: srcFilename } = await fetchAudioBuffer(audioUrl);
+      const detected = detectAudioFormat(rawBuffer);
+
+      let finalBuffer: Buffer;
+      let finalMime: string;
+      let finalFilename: string;
+
+      if (detected === 'ogg') {
+        finalBuffer = rawBuffer;
+        finalMime = 'audio/ogg';
+        finalFilename = srcFilename.replace(/\.[^.]+$/, '') + '.ogg';
+      } else {
+        const ffmpegOk = await isFfmpegAvailable();
+        if (!ffmpegOk) {
+          throw new Error(`Áudio em formato ${detected} requer ffmpeg para converter para OGG/Opus, mas ffmpeg não está disponível.`);
+        }
+        const tmp = path.join(process.cwd(), 'uploads', `engine_audio_tmp_${Date.now()}_${crypto.randomBytes(4).toString('hex')}.audio`);
+        finalBuffer = await convertBufferToOgg(rawBuffer, tmp);
+        finalMime = 'audio/ogg';
+        finalFilename = (srcFilename || 'audio').replace(/\.[^.]+$/, '') + '.ogg';
+      }
+
+      console.log(`[UltraStableEngine.audio] preparado para upload: phoneNumberId=${phoneNumberId} src=${srcFilename} rawMime=${rawMime} detected=${detected} bytes=${finalBuffer.length}`);
+      const mediaId = await metaAPI.uploadMediaToMeta(phoneNumberId, finalBuffer, finalMime, finalFilename, metaToken);
+      this.audioMediaIdCache.set(cacheKey, mediaId);
+      console.log(`[UltraStableEngine.audio] mediaId obtido e cacheado: ${mediaId} (key=${cacheKey.substring(0, 80)}...)`);
+      return mediaId;
+    })();
+
+    this.audioPrepareInflight.set(cacheKey, job);
+    try {
+      return await job;
+    } finally {
+      this.audioPrepareInflight.delete(cacheKey);
+    }
+  }
+
   private createSendFunction(
     phoneNumberId: string,
     lead: Lead,
@@ -1401,7 +1462,8 @@ export class UltraStableEngine {
               if (item.type === 'image') {
                 await sendImageMessage(phoneNumberId, formattedPhone, item.content, undefined, metaToken);
               } else if (item.type === 'audio') {
-                await sendAudioMessage(phoneNumberId, formattedPhone, item.content, metaToken);
+                const mediaId = await this.getOrPrepareAudioMediaId(item.content, phoneNumberId, metaToken);
+                await metaAPI.sendVoiceNoteMessage(phoneNumberId, formattedPhone, mediaId, metaToken);
               } else {
                 await metaAPI.sendFreeFormMessage(phoneNumberId, formattedPhone, item.content, metaToken);
               }

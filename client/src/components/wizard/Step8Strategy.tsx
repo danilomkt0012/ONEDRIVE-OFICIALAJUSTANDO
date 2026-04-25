@@ -411,7 +411,11 @@ export default function Step8Strategy({
                   data-testid="input-audio-url"
                 />
               </div>
-              <AudioRecorder onRecorded={(url) => setCampaignAudioUrl(url)} />
+              <AudioRecorder
+                onRecorded={(url) => setCampaignAudioUrl(url)}
+                uploadUrl="/api/campaigns/upload-static-audio"
+                fieldName="audio"
+              />
             </div>
             {campaignAudioUrl && (
               <div className="flex items-center gap-2 bg-muted/30 p-2 rounded-lg">
