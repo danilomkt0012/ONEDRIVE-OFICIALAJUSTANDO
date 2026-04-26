@@ -10,6 +10,7 @@ PIP_TARGET_DIR="${PIP_TARGET_DIR:-$HOME/workspace/.pythonlibs/lib/python3.11/sit
 mkdir -p "$PIP_TARGET_DIR"
 export PYTHONPATH="$PIP_TARGET_DIR:${PYTHONPATH:-}"
 PIP_INSTALL=(python3 -m pip install --quiet --target "$PIP_TARGET_DIR" --upgrade --no-deps)
+PIP_INSTALL_FULL=(python3 -m pip install --quiet --target "$PIP_TARGET_DIR" --upgrade)
 
 if python3 -c "import soundfile" 2>/dev/null; then
     echo "[install_tts] soundfile already installed — skipping."
@@ -54,39 +55,39 @@ if [ -n "$TRANSFORMERS_VER" ]; then
         echo "[install_tts] transformers==$TRANSFORMERS_VER already installed (compatible) — skipping."
     else
         echo "[install_tts] Incompatible transformers==$TRANSFORMERS_VER detected. Replacing with compatible version…"
-        python3 -m pip install --quiet "transformers>=4.41.0,<4.50.0"
+        "${PIP_INSTALL_FULL[@]}" "transformers>=4.41.0,<4.50.0"
     fi
 else
     echo "[install_tts] Installing transformers…"
-    python3 -m pip install --quiet "transformers>=4.41.0,<4.50.0"
+    "${PIP_INSTALL_FULL[@]}" "transformers>=4.41.0,<4.50.0"
 fi
 
 if python3 -c "import psutil" 2>/dev/null; then
     echo "[install_tts] psutil already installed — skipping."
 else
     echo "[install_tts] Installing psutil…"
-    python3 -m pip install --quiet "psutil>=5.9.0"
+    "${PIP_INSTALL_FULL[@]}" "psutil>=5.9.0"
 fi
 
 if python3 -c "import fastapi" 2>/dev/null; then
     echo "[install_tts] fastapi already installed — skipping."
 else
     echo "[install_tts] Installing fastapi…"
-    python3 -m pip install --quiet "fastapi>=0.104.0"
+    "${PIP_INSTALL_FULL[@]}" "fastapi>=0.104.0"
 fi
 
 if python3 -c "import uvicorn" 2>/dev/null; then
     echo "[install_tts] uvicorn already installed — skipping."
 else
     echo "[install_tts] Installing uvicorn…"
-    python3 -m pip install --quiet "uvicorn>=0.24.0"
+    "${PIP_INSTALL_FULL[@]}" "uvicorn>=0.24.0"
 fi
 
 if python3 -c "import multipart" 2>/dev/null; then
     echo "[install_tts] python-multipart already installed — skipping."
 else
     echo "[install_tts] Installing python-multipart…"
-    python3 -m pip install --quiet "python-multipart>=0.0.6"
+    "${PIP_INSTALL_FULL[@]}" "python-multipart>=0.0.6"
 fi
 
 echo "[install_tts] Verifying critical dependencies…"

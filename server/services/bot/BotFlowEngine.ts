@@ -251,6 +251,9 @@ export async function sendAudioWithRetry(
     try {
       if (asVoiceNote) {
         const { buffer, mimeType, filename } = await fetchAudioBuffer(audioUrl);
+        if (buffer.length < 1024) {
+          throw new Error(`Áudio inválido: arquivo muito pequeno (${buffer.length} bytes, mínimo 1KB). URL: ${audioUrl.substring(0, 80)}`);
+        }
         const ext = path.extname(filename).toLowerCase();
         const detectedFormat = detectAudioFormat(buffer);
         const isOggByMagic = detectedFormat === 'ogg';
@@ -1265,8 +1268,8 @@ export class BotFlowEngine {
               });
 
               ttsStep = 'buffer_validation';
-              if (!audioBuffer || audioBuffer.length === 0) {
-                throw new Error('TTS generation returned zero-byte audio output');
+              if (!audioBuffer || audioBuffer.length < 1024) {
+                throw new Error(`TTS generation returned audio too small to be valid (${audioBuffer?.length ?? 0} bytes, mínimo 1KB)`);
               }
 
               ttsStep = 'upload';

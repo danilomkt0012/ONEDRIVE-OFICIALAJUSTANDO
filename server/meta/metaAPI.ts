@@ -250,7 +250,9 @@ export class MetaWhatsAppAPI {
     try {
       const headers = token ? { Authorization: `Bearer ${token}` } : {};
       
-      console.log(`🏢 Business ID: ${businessId}`);
+      if (process.env.NODE_ENV !== 'production') {
+        console.log(`[MetaAPI] getPhoneNumbers businessId=${businessId}`);
+      }
       
       const response: AxiosResponse = await this.axiosInstance.get(
         `/${businessId}/phone_numbers`,
@@ -372,15 +374,18 @@ export class MetaWhatsAppAPI {
         template: templateData
       };
 
-      console.log(`[SEND] sendTemplateMessage: to=${recipientPhone} phoneNumberId=${phoneNumberId} template=${templateName} lang=${languageCode} url=${this.baseUrl}/${phoneNumberId}/messages`);
-      console.log(`[SEND] payload:`, JSON.stringify(messageData, null, 2));
+      if (process.env.NODE_ENV !== 'production') {
+        console.log(`[SEND] sendTemplateMessage: to=${recipientPhone} phoneNumberId=${phoneNumberId} template=${templateName} lang=${languageCode}`);
+      }
 
       const response: AxiosResponse = await withRetry(
         () => this.axiosInstance.post(`/${phoneNumberId}/messages`, messageData, { headers }),
         `sendTemplateMessage(${templateName}→${recipientPhone})`
       );
 
-      console.log(`[SEND] response: HTTP ${response.status} for ${recipientPhone}: ${JSON.stringify(response.data).slice(0, 500)}`);
+      if (process.env.NODE_ENV !== 'production') {
+        console.log(`[SEND] response: HTTP ${response.status} template=${templateName}`);
+      }
 
       const messageId = response.data?.messages?.[0]?.id;
       const messageStatus = response.data?.messages?.[0]?.message_status;
@@ -394,8 +399,6 @@ export class MetaWhatsAppAPI {
         }
         throw new Error(`API retornou resposta sem message ID. Status HTTP: ${response.status}. Body: ${JSON.stringify(response.data).slice(0, 300)}`);
       }
-
-      console.log(`[SEND] accepted: messageId=${messageId} waId=${waId || recipientPhone} status=${messageStatus || 'sent'}`);
 
       return response.data;
     } catch (error: any) {
@@ -538,15 +541,18 @@ export class MetaWhatsAppAPI {
         template: templateData
       };
 
-      console.log(`[SEND] sendTemplateWithButtons: to=${recipientPhone} phoneNumberId=${phoneNumberId} template=${templateName} lang=${languageCode} url=${this.baseUrl}/${phoneNumberId}/messages`);
-      console.log(`[SEND] payload:`, JSON.stringify(messageData, null, 2));
+      if (process.env.NODE_ENV !== 'production') {
+        console.log(`[SEND] sendTemplateWithButtons: to=${recipientPhone} phoneNumberId=${phoneNumberId} template=${templateName} lang=${languageCode}`);
+      }
 
       const response: AxiosResponse = await withRetry(
         () => this.axiosInstance.post(`/${phoneNumberId}/messages`, messageData, { headers }),
         `sendTemplateWithButtons(${templateName}→${recipientPhone})`
       );
 
-      console.log(`[SEND] response: HTTP ${response.status} for ${recipientPhone} (buttons): ${JSON.stringify(response.data).slice(0, 500)}`);
+      if (process.env.NODE_ENV !== 'production') {
+        console.log(`[SEND] response: HTTP ${response.status} template=${templateName} (buttons)`);
+      }
 
       const messageId = response.data?.messages?.[0]?.id;
       const messageStatus = response.data?.messages?.[0]?.message_status;
@@ -560,8 +566,6 @@ export class MetaWhatsAppAPI {
         }
         throw new Error(`API retornou resposta sem message ID. Status HTTP: ${response.status}. Body: ${JSON.stringify(response.data).slice(0, 300)}`);
       }
-
-      console.log(`[SEND] buttons accepted: messageId=${messageId} waId=${waId || recipientPhone} status=${messageStatus || 'sent'}`);
 
       return response.data;
     } catch (error: any) {
@@ -655,8 +659,6 @@ export class MetaWhatsAppAPI {
       text: { body: text },
     };
 
-    console.log(`[SEND] sendFreeFormMessage: to=${recipientPhone} phoneNumberId=${phoneNumberId}`);
-
     try {
       const response: AxiosResponse = await withRetry(
         () => this.axiosInstance.post(`/${phoneNumberId}/messages`, messageData, { headers }),
@@ -667,8 +669,6 @@ export class MetaWhatsAppAPI {
       if (!messageId) {
         throw new Error(`API retornou resposta sem message ID. Body: ${JSON.stringify(response.data).slice(0, 300)}`);
       }
-
-      console.log(`[SEND] freeform accepted: messageId=${messageId} to=${recipientPhone}`);
       return response.data;
     } catch (err: any) {
       const metaError = err?.response?.data?.error;
@@ -701,7 +701,6 @@ export class MetaWhatsAppAPI {
       type: 'audio',
       audio: { link: audioUrl },
     };
-    console.log(`[SEND] sendAudioMessage: to=${recipientPhone} phoneNumberId=${phoneNumberId} url=${audioUrl.substring(0, 80)}`);
     try {
       const response: AxiosResponse = await withRetry(
         () => this.axiosInstance.post(`/${phoneNumberId}/messages`, messageData, { headers }),
@@ -709,7 +708,6 @@ export class MetaWhatsAppAPI {
       );
       const messageId = response.data?.messages?.[0]?.id;
       if (!messageId) throw new Error(`API retornou resposta sem message ID`);
-      console.log(`[SEND] audio accepted: messageId=${messageId} to=${recipientPhone}`);
       return response.data;
     } catch (err: any) {
       const httpStatus = err?.response?.status;
@@ -738,7 +736,6 @@ export class MetaWhatsAppAPI {
     form.append('messaging_product', 'whatsapp');
     form.append('file', fileBuffer, { filename, contentType: mimeType });
 
-    console.log(`[SEND] uploadMedia: phoneNumberId=${phoneNumberId} filename=${filename} mimeType=${mimeType}`);
     try {
       const response: AxiosResponse = await withRetry(
         () => this.axiosInstance.post(`/${phoneNumberId}/media`, form, {
@@ -753,7 +750,6 @@ export class MetaWhatsAppAPI {
       );
       const mediaId: string = response.data?.id;
       if (!mediaId) throw new Error('API retornou resposta sem media ID');
-      console.log(`[SEND] upload accepted: mediaId=${mediaId}`);
       return mediaId;
     } catch (err: any) {
       const httpStatus = err?.response?.status;
@@ -788,7 +784,6 @@ export class MetaWhatsAppAPI {
       type: 'audio',
       audio: { id: mediaId, voice: true },
     };
-    console.log(`[SEND] sendVoiceNote: to=${recipientPhone} phoneNumberId=${phoneNumberId} mediaId=${mediaId}`);
     try {
       const response: AxiosResponse = await withRetry(
         () => this.axiosInstance.post(`/${phoneNumberId}/messages`, messageData, { headers }),
@@ -796,7 +791,6 @@ export class MetaWhatsAppAPI {
       );
       const messageId = response.data?.messages?.[0]?.id;
       if (!messageId) throw new Error(`API retornou resposta sem message ID`);
-      console.log(`[SEND] voice note accepted: messageId=${messageId} to=${recipientPhone}`);
       return response.data;
     } catch (err: any) {
       const httpStatus = err?.response?.status;
@@ -834,7 +828,6 @@ export class MetaWhatsAppAPI {
       type: 'image',
       image: imagePayload,
     };
-    console.log(`[SEND] sendImageMessageById: to=${recipientPhone} phoneNumberId=${phoneNumberId} mediaId=${mediaId}`);
     try {
       const response: AxiosResponse = await withRetry(
         () => this.axiosInstance.post(`/${phoneNumberId}/messages`, messageData, { headers }),
@@ -842,7 +835,6 @@ export class MetaWhatsAppAPI {
       );
       const messageId = response.data?.messages?.[0]?.id;
       if (!messageId) throw new Error(`API retornou resposta sem message ID`);
-      console.log(`[SEND] image by mediaId accepted: messageId=${messageId} to=${recipientPhone}`);
       return response.data;
     } catch (err: any) {
       const metaError = err?.response?.data?.error;
@@ -881,7 +873,6 @@ export class MetaWhatsAppAPI {
       type: 'image',
       image: imagePayload,
     };
-    console.log(`[SEND] sendImageMessage: to=${recipientPhone} phoneNumberId=${phoneNumberId} url=${imageUrl.substring(0, 80)}`);
     try {
       const response: AxiosResponse = await withRetry(
         () => this.axiosInstance.post(`/${phoneNumberId}/messages`, messageData, { headers }),
@@ -889,7 +880,6 @@ export class MetaWhatsAppAPI {
       );
       const messageId = response.data?.messages?.[0]?.id;
       if (!messageId) throw new Error(`API retornou resposta sem message ID`);
-      console.log(`[SEND] image accepted: messageId=${messageId} to=${recipientPhone}`);
       return response.data;
     } catch (err: any) {
       const metaError = err?.response?.data?.error;
@@ -940,14 +930,12 @@ export class MetaWhatsAppAPI {
       type: 'interactive',
       interactive,
     };
-    console.log(`[SEND] sendInteractiveButtons: to=${recipientPhone} phoneNumberId=${phoneNumberId} buttons=${buttons.length}`);
     const response: AxiosResponse = await withRetry(
       () => this.axiosInstance.post(`/${phoneNumberId}/messages`, messageData, { headers }),
       `sendInteractiveButtons(${recipientPhone})`
     );
     const messageId = response.data?.messages?.[0]?.id;
     if (!messageId) throw new Error(`API retornou resposta sem message ID`);
-    console.log(`[SEND] interactive buttons accepted: messageId=${messageId} to=${recipientPhone}`);
     return response.data;
   }
 
