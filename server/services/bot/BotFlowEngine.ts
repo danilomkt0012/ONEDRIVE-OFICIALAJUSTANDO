@@ -1169,6 +1169,7 @@ export class BotFlowEngine {
             const combinedAudioReachable = await checkMediaUrlReachable(node.mediaUrl);
             if (!combinedAudioReachable) {
               console.warn(`[MEDIA_PREFLIGHT_FAIL] combined/audio URL unreachable, sending fallback. url=${node.mediaUrl} phone=${phone}`);
+              recordMediaAlert(node.mediaUrl, 'combined_audio', node.id, state.flowId).catch(() => {});
               const fallbackMsg = await this.getMediaFallbackMessage(state.campaignId);
               await metaAPI.sendFreeFormMessage(phoneNumberId, phone, fallbackMsg, accessToken);
             } else {
@@ -1192,6 +1193,7 @@ export class BotFlowEngine {
             const combinedImgReachable = await checkMediaUrlReachable(node.mediaUrl);
             if (!combinedImgReachable) {
               console.warn(`[MEDIA_PREFLIGHT_FAIL] combined/image URL unreachable, sending fallback. url=${node.mediaUrl} phone=${phone}`);
+              recordMediaAlert(node.mediaUrl, 'combined_image', node.id, state.flowId).catch(() => {});
               const fallbackMsg = await this.getMediaFallbackMessage(state.campaignId);
               await metaAPI.sendFreeFormMessage(phoneNumberId, phone, fallbackMsg, accessToken);
             } else {
@@ -1206,6 +1208,7 @@ export class BotFlowEngine {
           const audioReachable = await checkMediaUrlReachable(node.mediaUrl);
           if (!audioReachable) {
             console.warn(`[MEDIA_PREFLIGHT_FAIL] audio URL unreachable, sending fallback. url=${node.mediaUrl} phone=${phone}`);
+            recordMediaAlert(node.mediaUrl, 'audio', node.id, state.flowId).catch(() => {});
             const fallbackMsg = await this.getMediaFallbackMessage(state.campaignId);
             await metaAPI.sendFreeFormMessage(phoneNumberId, phone, fallbackMsg, accessToken);
           } else {
@@ -1335,6 +1338,7 @@ export class BotFlowEngine {
           const imgReachable = await checkMediaUrlReachable(node.mediaUrl);
           if (!imgReachable) {
             console.warn(`[MEDIA_PREFLIGHT_FAIL] image URL unreachable, sending fallback. url=${node.mediaUrl} phone=${phone}`);
+            recordMediaAlert(node.mediaUrl, 'image', node.id, state.flowId).catch(() => {});
             const fallbackMsg = await this.getMediaFallbackMessage(state.campaignId);
             await metaAPI.sendFreeFormMessage(phoneNumberId, phone, fallbackMsg, accessToken);
           } else {

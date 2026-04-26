@@ -17,7 +17,7 @@ import { ttsQueue } from "./services/tts/TtsQueue";
 import { insertApiConfigurationSchema, insertLeadListSchema, insertCampaignSchema, imageTemplates } from "@shared/schema";
 import type { ImageTemplateField } from "@shared/schema";
 import { db } from "./db";
-import { eq, and, isNotNull } from "drizzle-orm";
+import { eq, and, isNotNull, isNull } from "drizzle-orm";
 import multer from "multer";
 import * as XLSX from "xlsx";
 import { z } from "zod";
@@ -46,7 +46,7 @@ import { serverStartTime, getLastWebhookEventTime, updateLastWebhookEvent } from
 import { botFlowEngine, withSendQueue, validateAudioUrl, sendAudioWithRetry, sendButtons, sendList, canonicalPhone, incrementAlertCounter, scheduleWithDebounce } from "./services/bot/BotFlowEngine";
 import { startBotTimeoutJob } from "./jobs/botTimeoutJob";
 import { setWebhookProcessingCallback } from "./jobs/webhookQueueWorker";
-import { botFlows, botFlowNodes, botConversationStates, campaigns as campaignsSchema, apiConfigurations as apiConfigsSchema, whatsappTemplates as templatesSchema, leads as leadsSchema, leadLists as leadListsSchema, messageDeliveries as messageDeliveriesSchema, messageStatus as messageStatusSchema, wabaHooks as wabaHooksSchema, wabas as wabasSchema, proxies as proxiesSchema, insertProxySchema, updateProxySchema } from "@shared/schema";
+import { botFlows, botFlowNodes, botConversationStates, campaigns as campaignsSchema, apiConfigurations as apiConfigsSchema, whatsappTemplates as templatesSchema, leads as leadsSchema, leadLists as leadListsSchema, messageDeliveries as messageDeliveriesSchema, messageStatus as messageStatusSchema, wabaHooks as wabaHooksSchema, wabas as wabasSchema, proxies as proxiesSchema, insertProxySchema, updateProxySchema, botMediaAlerts } from "@shared/schema";
 import type { BotNodeCondition, BotButtonPayloadItem, BotButtonsPayloadMeta, BotListPayload } from "@shared/schema";
 import { desc, asc, sql } from "drizzle-orm";
 import { generatePackageImage, generatePackageImageFromFile, preBatchGenerate, validateAllImages, generateFromCustomTemplate, cleanupCampaignImages } from "./services/imageGenerator";
@@ -7974,6 +7974,39 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
     // ──────────────────────────────────────────────────────────────────────────
+  // BOT MEDIA ALERTS
+  // ──────────────────────────────────────────────────────────────────────────
+
+  app.get("/api/bot/media-alerts", async (req, res) => {
+    try {
+      if (!req.session?.userId) return res.status(401).json({ error: 'Não autenticado' });
+      const alerts = await db
+        .select()
+        .from(botMediaAlerts)
+        .where(isNull(botMediaAlerts.resolvedAt))
+        .orderBy(desc(botMediaAlerts.lastSeenAt));
+      res.json(alerts);
+    } catch (error: any) {
+      routeError('getBotMediaAlerts', {}, error);
+      res.status(500).json({ error: 'Erro ao buscar alertas de mídia' });
+    }
+  });
+
+  app.patch("/api/bot/media-alerts/:id/resolve", async (req, res) => {
+    try {
+      if (!req.session?.userId) return res.status(401).json({ error: 'Não autenticado' });
+      const { id } = req.params;
+      await db
+        .update(botMediaAlerts)
+        .set({ resolvedAt: new Date() })
+        .where(eq(botMediaAlerts.id, id));
+      res.json({ ok: true });
+    } catch (error: any) {
+      routeError('resolveBotMediaAlert', { id: req.params.id }, error);
+      res.status(500).json({ error: 'Erro ao resolver alerta' });
+    }
+  });
+
   // VOICE PROFILES — CRUD
   // ──────────────────────────────────────────────────────────────────────────
 

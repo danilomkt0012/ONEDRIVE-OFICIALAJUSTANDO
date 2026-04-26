@@ -26,8 +26,9 @@ import { CSS } from "@dnd-kit/utilities";
 import {
   Bot, Plus, Trash2, Save, Power, PowerOff, GripVertical,
   MessageSquare, Image, Mic, List, LayoutGrid, X, Upload, Eye, EyeOff,
-  ChevronRight,
+  ChevronRight, AlertTriangle, CheckCircle,
 } from "lucide-react";
+import { queryClient } from "@/lib/queryClient";
 
 interface BotRule {
   id: string;
@@ -46,6 +47,93 @@ interface BotSettings {
   id?: string;
   isActive: boolean;
   fallbackMessage: string | null;
+}
+
+interface BotMediaAlert {
+  id: string;
+  mediaUrl: string;
+  mediaType: string;
+  nodeId: string | null;
+  flowId: string | null;
+  occurrenceCount: number;
+  firstSeenAt: string;
+  lastSeenAt: string;
+}
+
+function BotMediaAlertsPanel() {
+  const { toast } = useToast();
+
+  const { data: alerts = [] } = useQuery<BotMediaAlert[]>({
+    queryKey: ['/api/bot/media-alerts'],
+    refetchInterval: 60_000,
+  });
+
+  const resolveMutation = useMutation({
+    mutationFn: (id: string) =>
+      apiRequest('PATCH', `/api/bot/media-alerts/${id}/resolve`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/bot/media-alerts'] });
+      toast({ title: 'Alerta resolvido', description: 'Marque o áudio como atualizado quando fizer o upload.' });
+    },
+  });
+
+  if (alerts.length === 0) return null;
+
+  const mediaTypeLabel: Record<string, string> = {
+    audio: 'Áudio',
+    image: 'Imagem',
+    combined_audio: 'Áudio (nó combinado)',
+    combined_image: 'Imagem (nó combinado)',
+  };
+
+  return (
+    <div className="bg-amber-50 border border-amber-300 rounded-xl p-4 space-y-3" data-testid="bot-media-alerts-panel">
+      <div className="flex items-center gap-2">
+        <AlertTriangle size={18} className="text-amber-600 flex-shrink-0" />
+        <span className="font-semibold text-amber-900 text-sm">
+          {alerts.length === 1
+            ? '1 mídia do bot está inacessível'
+            : `${alerts.length} mídias do bot estão inacessíveis`}
+        </span>
+      </div>
+      <p className="text-xs text-amber-800">
+        O bot detectou que os arquivos abaixo não estão mais acessíveis. Enquanto isso, ele envia uma mensagem de texto no lugar. Faça o upload novamente e clique em <strong>Já atualizei</strong>.
+      </p>
+      <div className="space-y-2">
+        {alerts.map((alert) => (
+          <div
+            key={alert.id}
+            className="bg-white border border-amber-200 rounded-lg px-3 py-2 flex items-center justify-between gap-3"
+            data-testid={`bot-media-alert-${alert.id}`}
+          >
+            <div className="min-w-0">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-xs font-medium text-amber-700 bg-amber-100 px-1.5 py-0.5 rounded">
+                  {mediaTypeLabel[alert.mediaType] ?? alert.mediaType}
+                </span>
+                <span className="text-xs text-gray-500">
+                  {alert.occurrenceCount}× falhou · última vez {new Date(alert.lastSeenAt).toLocaleString('pt-BR')}
+                </span>
+              </div>
+              <p className="text-xs text-gray-700 mt-1 truncate max-w-xs sm:max-w-md" title={alert.mediaUrl}>
+                {alert.mediaUrl.split('/').pop() ?? alert.mediaUrl}
+              </p>
+            </div>
+            <Button
+              size="sm"
+              variant="outline"
+              className="flex-shrink-0 text-xs border-green-400 text-green-700 hover:bg-green-50"
+              disabled={resolveMutation.isPending}
+              onClick={() => resolveMutation.mutate(alert.id)}
+              data-testid={`resolve-alert-${alert.id}`}
+            >
+              <CheckCircle size={13} className="mr-1" /> Já atualizei
+            </Button>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
 }
 
 const RESPONSE_TYPES = [
@@ -533,6 +621,8 @@ export default function BotPage() {
       </header>
 
       <div className="p-3 sm:p-6 max-w-5xl mx-auto space-y-4 sm:space-y-6">
+        <BotMediaAlertsPanel />
+
         <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
           <div className="flex items-start gap-3">
             <div className="w-8 h-8 rounded-lg bg-blue-100 flex items-center justify-center flex-shrink-0 mt-0.5">
