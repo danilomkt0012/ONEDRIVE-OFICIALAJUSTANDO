@@ -5,7 +5,7 @@ import { fileURLToPath } from 'url';
 import { fetchAudioBuffer, validateNoSSRF } from '../../utils/ssrfGuard';
 import { detectAudioFormat, isFfmpegAvailable, convertBufferToOgg } from '../../utils/audioConverter';
 import { db } from '../../db';
-import { botFlows, botFlowNodes, botConversationStates, leads, campaigns, campaignAutomationRules, imageTemplates, voiceProfiles } from '@shared/schema';
+import { botFlows, botFlowNodes, botConversationStates, leads, campaigns, campaignAutomationRules, imageTemplates, voiceProfiles, botMediaAlerts } from '@shared/schema';
 import type { BotFlow, BotFlowNode, BotConversationState, BotNodeCondition, ImageTemplateField } from '@shared/schema';
 import { audioStitchingService } from '../tts/AudioStitchingService';
 import { ttsService } from '../tts/TtsService';
@@ -68,6 +68,27 @@ async function checkMediaUrlReachable(url: string, timeoutMs = 5000): Promise<bo
     }
   } catch {
     return false;
+  }
+}
+
+async function recordMediaAlert(
+  mediaUrl: string,
+  mediaType: string,
+  nodeId?: string | null,
+  flowId?: string | null,
+): Promise<void> {
+  try {
+    await db.execute(sql`
+      INSERT INTO bot_media_alerts (id, media_url, media_type, node_id, flow_id, occurrence_count, first_seen_at, last_seen_at, resolved_at)
+      VALUES (gen_random_uuid(), ${mediaUrl}, ${mediaType}, ${nodeId ?? null}, ${flowId ?? null}, 1, now(), now(), null)
+      ON CONFLICT (media_url) DO UPDATE
+        SET occurrence_count = bot_media_alerts.occurrence_count + 1,
+            last_seen_at = now(),
+            resolved_at = null
+        WHERE bot_media_alerts.resolved_at IS NOT NULL OR bot_media_alerts.media_url = ${mediaUrl}
+    `);
+  } catch (e: any) {
+    logError('recordMediaAlert', { mediaUrl, mediaType }, e);
   }
 }
 

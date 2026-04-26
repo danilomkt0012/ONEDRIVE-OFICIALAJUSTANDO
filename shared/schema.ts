@@ -951,6 +951,24 @@ export const ttsJobProgress = pgTable("tts_job_progress", {
   index("idx_tts_job_campaign").on(table.campaignId),
 ]);
 
+export const botMediaAlerts = pgTable("bot_media_alerts", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  mediaUrl: text("media_url").notNull().unique(),
+  mediaType: text("media_type").notNull(),
+  nodeId: varchar("node_id"),
+  flowId: varchar("flow_id"),
+  occurrenceCount: integer("occurrence_count").notNull().default(1),
+  firstSeenAt: timestamp("first_seen_at").defaultNow(),
+  lastSeenAt: timestamp("last_seen_at").defaultNow(),
+  resolvedAt: timestamp("resolved_at"),
+}, (table) => [
+  index("idx_bot_media_alerts_resolved").on(table.resolvedAt),
+]);
+
+export const insertBotMediaAlertSchema = createInsertSchema(botMediaAlerts).omit({ id: true, firstSeenAt: true, lastSeenAt: true });
+export type BotMediaAlert = typeof botMediaAlerts.$inferSelect;
+export type InsertBotMediaAlert = z.infer<typeof insertBotMediaAlertSchema>;
+
 export const insertVoiceProfileSchema = createInsertSchema(voiceProfiles).omit({ id: true, createdAt: true });
 export const insertTtsAudioCacheSchema = createInsertSchema(ttsAudioCache).omit({ id: true, createdAt: true });
 export const insertTtsJobProgressSchema = createInsertSchema(ttsJobProgress).omit({ id: true, createdAt: true, updatedAt: true });
