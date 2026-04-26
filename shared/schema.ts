@@ -216,6 +216,7 @@ export const campaigns = pgTable("campaigns", {
   businessHoursEnd: integer("business_hours_end").default(20),
   automationEnabled: boolean("automation_enabled").default(false),
   automationFallback: text("automation_fallback").default("silence"),
+  campaignMode: text("campaign_mode").default("broadcast"),
   scheduledAt: timestamp("scheduled_at"),
   campaignConfig: jsonb("campaign_config"),
   wabaConfig: jsonb("waba_config"),

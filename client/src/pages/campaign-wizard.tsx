@@ -5,7 +5,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import {
   ChevronLeft, ChevronRight, Check, Phone, MessageSquare, Bot, Users, Settings,
-  Save, Loader2, ArrowLeft, Image, Shield, CheckCircle, AlertCircle, Building2,
+  Save, Loader2, ArrowLeft, Image, Shield, CheckCircle, AlertCircle, Building2, Megaphone,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import type { ImageTemplateField } from "@shared/schema";
@@ -58,6 +58,14 @@ export default function CampaignWizardPage() {
 
   const [selectedNumbers, setSelectedNumbers] = useState<any[]>([]);
   const [selectedTemplates, setSelectedTemplates] = useState<string[]>([]);
+  const [campaignMode, setCampaignMode] = useState("broadcast");
+  const [botAutoReply, setBotAutoReply] = useState({
+    message1Text: "",
+    message2Text: "",
+    optionalLink: "",
+    delayBetweenMessagesMs: 1000,
+    sendLinkInMessage2: true,
+  });
   const [automationEnabled, setAutomationEnabled] = useState(false);
   const [automationFallback, setAutomationFallback] = useState("silence");
   const [cswFallbackDefault, setCswFallbackDefault] = useState("text_only");
@@ -708,9 +716,20 @@ export default function CampaignWizardPage() {
         setSelectedNumbers(campaign.selectedNumbers);
       }
       setSelectedTemplates(Array.isArray(campaign.templateIds) ? campaign.templateIds : campaign.templateId ? [campaign.templateId] : []);
+      if ((campaign as any).campaignMode) setCampaignMode((campaign as any).campaignMode);
       setAutomationEnabled(campaign.automationEnabled || false);
       setAutomationFallback(campaign.automationFallback || "silence");
       const bc = campaign.botConfig as Record<string, unknown> | null;
+      if (bc?.botAutoReply && typeof bc.botAutoReply === 'object') {
+        const ar = bc.botAutoReply as any;
+        setBotAutoReply({
+          message1Text: ar.message1Text || "",
+          message2Text: ar.message2Text || "",
+          optionalLink: ar.optionalLink || "",
+          delayBetweenMessagesMs: ar.delayBetweenMessagesMs ?? 1000,
+          sendLinkInMessage2: ar.sendLinkInMessage2 !== false,
+        });
+      }
       if (bc?.cswFallbackDefault && typeof bc.cswFallbackDefault === "string") {
         setCswFallbackDefault(bc.cswFallbackDefault);
       }
@@ -819,6 +838,7 @@ export default function CampaignWizardPage() {
   const saveCurrentStep = useCallback(async () => {
     switch (currentStep) {
       case 1:
+        await saveSection("info", { campaignMode });
         await saveSection("send-config", {
           campaignConfig: {
             ...(campaign?.campaignConfig || {}),
@@ -907,6 +927,7 @@ export default function CampaignWizardPage() {
             ...(campaign?.botConfig as Record<string, unknown> || {}),
             cswFallbackDefault,
             fallbackMessage: botFallbackMessage || undefined,
+            botAutoReply: campaignMode === 'bot_auto_reply' ? botAutoReply : undefined,
           },
           rules: botRules.map((r) => ({
             keyword: r.keyword,
@@ -1388,6 +1409,48 @@ export default function CampaignWizardPage() {
           )}
 
           {currentStep === 6 && (
+            <div className="space-y-6">
+            <div className="space-y-2">
+              <p className="text-sm font-medium text-gray-900">Tipo de Campanha</p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <button
+                  type="button"
+                  data-testid="mode-broadcast"
+                  onClick={() => setCampaignMode('broadcast')}
+                  className={`flex items-start gap-3 p-4 border-2 rounded-xl text-left transition-colors ${
+                    campaignMode !== 'bot_auto_reply'
+                      ? 'border-[#0066FF] bg-[#0066FF]/5'
+                      : 'border-border bg-background hover:border-muted-foreground/30'
+                  }`}
+                >
+                  <div className="w-8 h-8 rounded-lg bg-blue-100 flex items-center justify-center flex-shrink-0 mt-0.5">
+                    <Megaphone className="w-4 h-4 text-blue-600" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium">Disparo em Massa</p>
+                    <p className="text-xs text-muted-foreground">Envia templates HSM para uma lista de contatos</p>
+                  </div>
+                </button>
+                <button
+                  type="button"
+                  data-testid="mode-bot-auto-reply"
+                  onClick={() => setCampaignMode('bot_auto_reply')}
+                  className={`flex items-start gap-3 p-4 border-2 rounded-xl text-left transition-colors ${
+                    campaignMode === 'bot_auto_reply'
+                      ? 'border-[#0066FF] bg-[#0066FF]/5'
+                      : 'border-border bg-background hover:border-muted-foreground/30'
+                  }`}
+                >
+                  <div className="w-8 h-8 rounded-lg bg-green-100 flex items-center justify-center flex-shrink-0 mt-0.5">
+                    <Bot className="w-4 h-4 text-green-600" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium">Bot Click-to-WhatsApp</p>
+                    <p className="text-xs text-muted-foreground">Responde automaticamente leads de anúncios com 2 mensagens em sequência</p>
+                  </div>
+                </button>
+              </div>
+            </div>
             <Step7Bot
               automationEnabled={automationEnabled} setAutomationEnabled={setAutomationEnabled}
               automationFallback={automationFallback} setAutomationFallback={setAutomationFallback}
@@ -1400,7 +1463,11 @@ export default function CampaignWizardPage() {
               setFirstResponseBodyText={setFirstResponseBodyText}
               botFallbackMessage={botFallbackMessage}
               setBotFallbackMessage={setBotFallbackMessage}
+              campaignMode={campaignMode}
+              botAutoReply={botAutoReply}
+              setBotAutoReply={setBotAutoReply}
             />
+            </div>
           )}
 
           {currentStep === 7 && (

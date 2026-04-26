@@ -151,6 +151,7 @@ let domIdx = 0;
 let enviosNoDom = 0;
 let disparoSeq = 0;
 const usedPaths = new Set<string>();
+const botAutoReplyTimestamps = new Map<string, number>();
 const MAX_PATH_CACHE = 2000;
 const ROTACAO_A_CADA = 450;
 
@@ -6275,6 +6276,64 @@ export async function registerRoutes(app: Express): Promise<Server> {
                   try {
                   for (const campaign of activeCampaignsForFlow) {
                     console.log(`[BOT] Processing inbound for campaign ${campaign.id} (${campaign.name}) phone=${replyPhone} phoneNumId=${phoneNumId} hasToken=${!!waba.accessToken}`);
+
+                    // BOT AUTO-REPLY mode (Click-to-WhatsApp inbound leads)
+                    const campMode = (campaign as any).campaignMode || 'broadcast';
+                    if (campMode === 'bot_auto_reply') {
+                      if (campaign.status !== 'running') {
+                        console.log(`[BOT_AUTO_REPLY] Campaign ${campaign.id} skipped — status=${campaign.status}`);
+                        continue;
+                      }
+                      const dupeKey = `${convo.id}:${campaign.id}`;
+                      const lastReply = botAutoReplyTimestamps.get(dupeKey) || 0;
+                      const REPLY_COOLDOWN_MS = 5 * 60 * 1000;
+                      if (Date.now() - lastReply < REPLY_COOLDOWN_MS) {
+                        console.log(`[BOT_AUTO_REPLY] Campaign ${campaign.id} — cooldown skip for convoId=${convo.id} (${Math.round((Date.now() - lastReply) / 1000)}s ago)`);
+                        continue;
+                      }
+                      botAutoReplyTimestamps.set(dupeKey, Date.now());
+                      const arCfg = ((campaign.botConfig as any)?.botAutoReply || {}) as Record<string, any>;
+                      const msg1 = (arCfg.message1Text || '').trim();
+                      const msg2 = (arCfg.message2Text || '').trim();
+                      const optLink = (arCfg.optionalLink || '').trim();
+                      const delayMs = typeof arCfg.delayBetweenMessagesMs === 'number' ? arCfg.delayBetweenMessagesMs : 1000;
+                      const linkInMsg2 = arCfg.sendLinkInMessage2 !== false;
+                      const text1 = msg1 + (optLink && !linkInMsg2 ? '\n' + optLink : '');
+                      const text2 = msg2 + (optLink && linkInMsg2 ? '\n' + optLink : '');
+                      try {
+                        if (text1) {
+                          await withSendQueue(replyPhone, () =>
+                            metaAPI.sendFreeFormMessage(phoneNumId, replyPhone, text1, waba.accessToken)
+                          );
+                          await wabaStorage.createMessage({
+                            conversationId: convo.id,
+                            direction: 'outbound',
+                            body: text1,
+                            type: 'text',
+                            status: 'sent',
+                          });
+                        }
+                        if (text2) {
+                          await new Promise(r => setTimeout(r, delayMs));
+                          await withSendQueue(replyPhone, () =>
+                            metaAPI.sendFreeFormMessage(phoneNumId, replyPhone, text2, waba.accessToken)
+                          );
+                          await wabaStorage.createMessage({
+                            conversationId: convo.id,
+                            direction: 'outbound',
+                            body: text2,
+                            type: 'text',
+                            status: 'sent',
+                          });
+                        }
+                        lastBotResult = 'handled';
+                        console.log(`[BOT_AUTO_REPLY] Sent auto-reply to ${replyPhone} for campaign=${campaign.id}`);
+                      } catch (arErr: any) {
+                        console.error(`[BOT_AUTO_REPLY] Error sending: ${arErr.message}`, { phone: replyPhone, campaignId: campaign.id });
+                      }
+                      continue; // skip regular bot flow for this campaign
+                    }
+
                     try {
                       let result: BotResult | null = null;
                       let firstTimedOut = false;

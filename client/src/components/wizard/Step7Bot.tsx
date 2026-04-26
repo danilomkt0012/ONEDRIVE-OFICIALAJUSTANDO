@@ -16,6 +16,14 @@ export interface FirstResponseButton {
   nextNodeId?: string;
 }
 
+export interface BotAutoReplyConfig {
+  message1Text: string;
+  message2Text: string;
+  optionalLink: string;
+  delayBetweenMessagesMs: number;
+  sendLinkInMessage2: boolean;
+}
+
 interface Step7BotProps {
   automationEnabled: boolean;
   setAutomationEnabled: (v: boolean) => void;
@@ -32,6 +40,9 @@ interface Step7BotProps {
   setFirstResponseBodyText?: (v: string) => void;
   botFallbackMessage?: string;
   setBotFallbackMessage?: (v: string) => void;
+  campaignMode?: string;
+  botAutoReply?: BotAutoReplyConfig;
+  setBotAutoReply?: (v: BotAutoReplyConfig) => void;
 }
 
 interface BotFlowNode {
@@ -47,6 +58,8 @@ export default function Step7Bot({
   firstResponseButtons = [], setFirstResponseButtons,
   firstResponseBodyText = '', setFirstResponseBodyText,
   botFallbackMessage = '', setBotFallbackMessage,
+  campaignMode = 'broadcast',
+  botAutoReply, setBotAutoReply,
 }: Step7BotProps) {
   const [botFlowNodes, setBotFlowNodes] = useState<BotFlowNode[]>([]);
 
@@ -81,12 +94,107 @@ export default function Step7Bot({
         <div className="flex items-start gap-2">
           <Info className="w-4 h-4 text-blue-600 flex-shrink-0 mt-0.5" />
           <p className="text-sm text-blue-800">
-            Após criar a campanha, você pode editar todas as configurações do bot a qualquer momento na aba <strong>Bot</strong> da página de detalhes da campanha — mesmo com a campanha em andamento.
+            {campaignMode === 'bot_auto_reply'
+              ? 'Configure as mensagens automáticas que serão enviadas quando um lead entrar em contato via anúncio Click-to-WhatsApp.'
+              : <>Após criar a campanha, você pode editar todas as configurações do bot a qualquer momento na aba <strong>Bot</strong> da página de detalhes da campanha — mesmo com a campanha em andamento.</>}
           </p>
         </div>
       </div>
 
-      {setFirstResponseButtons && (
+      {campaignMode === 'bot_auto_reply' && setBotAutoReply && botAutoReply !== undefined && (
+        <div className="border rounded-xl p-4 space-y-4 shadow-sm">
+          <div className="flex items-center gap-2 mb-1">
+            <div className="w-7 h-7 rounded-lg bg-green-100 flex items-center justify-center">
+              <Bot className="w-3.5 h-3.5 text-green-600" />
+            </div>
+            <div>
+              <Label className="text-sm font-medium">Respostas Automáticas (Bot Click-to-WhatsApp)</Label>
+              <p className="text-xs text-muted-foreground">Enviadas em sequência quando o lead enviar qualquer mensagem</p>
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <Label className="text-xs font-medium">Mensagem 1 *</Label>
+            <Textarea
+              data-testid="input-bot-message1"
+              value={botAutoReply.message1Text}
+              onChange={e => setBotAutoReply({ ...botAutoReply, message1Text: e.target.value })}
+              placeholder="Ex: Olá! Obrigado por entrar em contato. Temos uma oferta especial para você."
+              rows={3}
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label className="text-xs font-medium">Mensagem 2 *</Label>
+            <Textarea
+              data-testid="input-bot-message2"
+              value={botAutoReply.message2Text}
+              onChange={e => setBotAutoReply({ ...botAutoReply, message2Text: e.target.value })}
+              placeholder="Ex: Clique no link abaixo para garantir seu desconto exclusivo!"
+              rows={3}
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label className="text-xs font-medium">Link Opcional</Label>
+            <Input
+              data-testid="input-bot-link"
+              value={botAutoReply.optionalLink}
+              onChange={e => setBotAutoReply({ ...botAutoReply, optionalLink: e.target.value })}
+              placeholder="https://seu-site.com/oferta"
+            />
+            {botAutoReply.optionalLink && (
+              <div className="flex items-center gap-4 mt-1">
+                <Label className="text-xs text-muted-foreground">Incluir link em:</Label>
+                <div className="flex gap-3">
+                  <label className="flex items-center gap-1.5 cursor-pointer">
+                    <input
+                      type="radio"
+                      name="linkPosition"
+                      checked={!botAutoReply.sendLinkInMessage2}
+                      onChange={() => setBotAutoReply({ ...botAutoReply, sendLinkInMessage2: false })}
+                    />
+                    <span className="text-xs">Mensagem 1</span>
+                  </label>
+                  <label className="flex items-center gap-1.5 cursor-pointer">
+                    <input
+                      type="radio"
+                      name="linkPosition"
+                      checked={botAutoReply.sendLinkInMessage2}
+                      onChange={() => setBotAutoReply({ ...botAutoReply, sendLinkInMessage2: true })}
+                    />
+                    <span className="text-xs">Mensagem 2</span>
+                  </label>
+                </div>
+              </div>
+            )}
+          </div>
+
+          <div className="space-y-2">
+            <div className="flex items-center gap-2">
+              <Clock className="w-3.5 h-3.5 text-muted-foreground" />
+              <Label className="text-xs font-medium">Intervalo entre mensagens</Label>
+            </div>
+            <div className="flex items-center gap-3">
+              <input
+                data-testid="input-bot-delay"
+                type="range"
+                min={500}
+                max={5000}
+                step={100}
+                value={botAutoReply.delayBetweenMessagesMs}
+                onChange={e => setBotAutoReply({ ...botAutoReply, delayBetweenMessagesMs: Number(e.target.value) })}
+                className="flex-1"
+              />
+              <span className="text-sm font-medium w-16 text-right">
+                {(botAutoReply.delayBetweenMessagesMs / 1000).toFixed(1)}s
+              </span>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {campaignMode !== 'bot_auto_reply' && setFirstResponseButtons && (
         <div className="border rounded-xl p-4 space-y-3 shadow-sm">
           <div className="flex items-center gap-2 mb-1">
             <div className="w-7 h-7 rounded-lg bg-green-100 flex items-center justify-center">
@@ -188,20 +296,22 @@ export default function Step7Bot({
         </div>
       )}
 
-      <div className="flex items-center justify-between p-4 border rounded-xl bg-muted/20 hover:bg-muted/30 transition-colors">
-        <div className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded-lg bg-purple-100 flex items-center justify-center">
-            <Bot className="w-4 h-4 text-purple-600" />
+      {campaignMode !== 'bot_auto_reply' && (
+        <div className="flex items-center justify-between p-4 border rounded-xl bg-muted/20 hover:bg-muted/30 transition-colors">
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 rounded-lg bg-purple-100 flex items-center justify-center">
+              <Bot className="w-4 h-4 text-purple-600" />
+            </div>
+            <div>
+              <Label className="text-sm font-medium">Bot Automático</Label>
+              <p className="text-xs text-muted-foreground">Ative para responder automaticamente a mensagens recebidas. O bot pode enviar texto, imagem, áudio ou combinações.</p>
+            </div>
           </div>
-          <div>
-            <Label className="text-sm font-medium">Bot Automático</Label>
-            <p className="text-xs text-muted-foreground">Ative para responder automaticamente a mensagens recebidas. O bot pode enviar texto, imagem, áudio ou combinações.</p>
-          </div>
+          <Switch checked={automationEnabled} onCheckedChange={setAutomationEnabled} />
         </div>
-        <Switch checked={automationEnabled} onCheckedChange={setAutomationEnabled} />
-      </div>
+      )}
 
-      {automationEnabled && (
+      {campaignMode !== 'bot_auto_reply' && automationEnabled && (
         <>
           <div className="border rounded-xl p-4 space-y-3 shadow-sm">
             <Label className="text-sm font-medium">Fallback (quando não há regra)</Label>

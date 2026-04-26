@@ -344,6 +344,7 @@ export function registerCampaignRoutes(app: Express): void {
         name: z.string().min(1).optional(),
         description: z.string().max(500).optional(),
         isTestMode: z.boolean().optional(),
+        campaignMode: z.string().optional(),
       });
       const data = schema.parse(req.body);
 

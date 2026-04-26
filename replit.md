@@ -25,6 +25,7 @@ Branding: Project name is "Overdrive". Logo stored at attached_assets/overdrive-
 - **Multi-WABA System**: Supports multiple WhatsApp Business Accounts with isolation and security, offering WABA management, conversation management, real-time chat events, automation rules, and personalization parameter models.
 - **Global Bot Automation**: Independent bot system for automated responses, with campaign rules taking priority.
 - **Bot Flow Engine**: State machine with mutex per phone+flow, supporting variable replacement, audio/button validation, and personalized image generation.
+- **Bot Campaign Mode (bot_auto_reply)**: New campaign type for Click-to-WhatsApp inbound leads. When `campaignMode === 'bot_auto_reply'`, inbound webhook handler skips the regular BotFlowEngine and instead sends 2 configured messages in sequence with optional link, with 5-minute per-conversation cooldown (in-memory Map). Config stored in `botConfig.botAutoReply` JSONB. Campaign mode selectable in wizard Step 6 (Bot step). Separate from broadcast/disparo flow.
 - **Pre-send Validation**: Campaign wizard validates WABA accessToken, appSecret, bot flow nodes, and WABA numbers before allowing campaign start.
 - **Image Generation (node-canvas)**: Uses node-canvas for image generation with fixed canvas, relative positioning, and text alignment, with fallback to SVG+Sharp.
 
