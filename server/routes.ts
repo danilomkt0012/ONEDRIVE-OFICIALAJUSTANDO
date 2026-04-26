@@ -40,7 +40,7 @@ import { shouldBlockMarketingTemplate } from "./services/engine/TierDetection";
 import { metricsPublisher, GlobalCampaignMetrics } from "./services/observability/CampaignMetricsPublisher";
 import { getOrCreateAdapter, removeAdapter } from "./services/observability/CampaignMetricsAdapter";
 import { campaignStore } from "./services/campaign/CampaignStore";
-import { registerExecutor } from "./services/campaign/executionBridge";
+import { registerExecutor, registerPauser, registerResumer } from "./services/campaign/executionBridge";
 import { PhoneNumberWithStatus, ThroughputEstimate, PhoneSelectionConfig } from "@shared/phoneNumberTypes";
 import { serverStartTime, getLastWebhookEventTime, updateLastWebhookEvent } from "./utils/serverState";
 import { botFlowEngine, withSendQueue, validateAudioUrl, sendAudioWithRetry, sendButtons, sendList, canonicalPhone, incrementAlertCounter, scheduleWithDebounce } from "./services/bot/BotFlowEngine";
@@ -9301,7 +9301,28 @@ async function executeParallelCampaign(campaignId: string, batchingRate?: number
         wabaId: selectedTemplate.wabaId ?? undefined,
       }];
     }
-    
+
+    // STRICT TEMPLATE FILTER: if no explicit multi-template rotation, enforce campaign.templateId only
+    const campaignHasExplicitMultiTemplates = campaignTemplateIds && campaignTemplateIds.length > 1;
+    if (!campaignHasExplicitMultiTemplates && formattedTemplates.length > 1) {
+      const filtered = formattedTemplates.filter(t =>
+        t.id === selectedTemplate.id ||
+        t.name === selectedTemplate.name ||
+        (t.templateId && t.templateId === selectedTemplate.templateId)
+      );
+      formattedTemplates = filtered.length > 0 ? filtered : [{
+        id: selectedTemplate.id,
+        templateId: selectedTemplate.templateId,
+        name: selectedTemplate.name,
+        language: selectedTemplate.language,
+        status: selectedTemplate.status,
+        category: selectedTemplate.category,
+        components: selectedTemplate.components as any[],
+        wabaId: selectedTemplate.wabaId ?? undefined,
+      }];
+      console.log(`   🎯 Strict template filter: single template enforced → ${formattedTemplates[0].name}`);
+    }
+
     const rotationMode = (campConfig.rotationMode as string) || 'sequential';
     
     if (formattedTemplates.length > 1) {
@@ -10185,4 +10206,12 @@ registerExecutor(async (campaignId, options) => {
     options.wabaConfigs,
     options.templateWeights,
   );
+});
+
+registerPauser((campaignId) => {
+  pauseActiveEngineForCampaign(campaignId);
+});
+
+registerResumer(async (campaignId, startFromIndex) => {
+  await executeUltraStableCampaignWithResume(campaignId, startFromIndex);
 });

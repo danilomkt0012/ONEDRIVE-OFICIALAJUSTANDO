@@ -1,3 +1,25 @@
+export type PauseFn = (campaignId: string) => void;
+export type ResumeFn = (campaignId: string, startFromIndex: number) => Promise<void>;
+
+let _pauser: PauseFn | null = null;
+let _resumer: ResumeFn | null = null;
+
+export function registerPauser(fn: PauseFn) {
+  _pauser = fn;
+}
+
+export function registerResumer(fn: ResumeFn) {
+  _resumer = fn;
+}
+
+export function triggerCampaignPause(campaignId: string): void {
+  if (_pauser) _pauser(campaignId);
+}
+
+export async function triggerCampaignResume(campaignId: string, startFromIndex: number): Promise<void> {
+  if (_resumer) return _resumer(campaignId, startFromIndex);
+}
+
 export type CampaignExecutionOptions = {
   speedMode?: string;
   batchingRate?: number;

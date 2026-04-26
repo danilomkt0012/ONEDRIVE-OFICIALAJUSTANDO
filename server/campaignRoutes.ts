@@ -7,7 +7,7 @@ import { eq, desc, sql, and, like, count } from "drizzle-orm";
 import { z } from "zod";
 import { campaignStore } from "./services/campaign/CampaignStore";
 import { metricsPublisher } from "./services/observability/CampaignMetricsPublisher";
-import { triggerCampaignExecution } from "./services/campaign/executionBridge";
+import { triggerCampaignExecution, triggerCampaignPause, triggerCampaignResume } from "./services/campaign/executionBridge";
 import { generateSignedImageUrl } from "./services/signedUrl";
 import { EventEmitter } from "events";
 import { logError } from './utils/logger';
@@ -1162,6 +1162,8 @@ export function registerCampaignRoutes(app: Express): void {
       const campaign = await getOwnedCampaign(req.params.id, req.session.userId!);
       if (!campaign) return res.status(404).json({ error: "Campanha não encontrada" });
 
+      triggerCampaignPause(req.params.id);
+
       const [updated] = await db.update(campaigns)
         .set({ status: "paused", updatedAt: new Date() })
         .where(and(eq(campaigns.id, req.params.id), eq(campaigns.userId, req.session.userId!)))
@@ -1180,12 +1182,22 @@ export function registerCampaignRoutes(app: Express): void {
       const campaign = await getOwnedCampaign(req.params.id, req.session.userId!);
       if (!campaign) return res.status(404).json({ error: "Campanha não encontrada" });
 
+      if (campaign.status !== "paused") {
+        return res.status(400).json({ error: "Apenas campanhas pausadas podem ser retomadas" });
+      }
+
       const [updated] = await db.update(campaigns)
         .set({ status: "running", updatedAt: new Date() })
         .where(and(eq(campaigns.id, req.params.id), eq(campaigns.userId, req.session.userId!)))
         .returning();
 
       if (!updated) return res.status(404).json({ error: "Campanha não encontrada" });
+
+      const startFromIndex = (campaign.successMessages ?? 0) + (campaign.failedMessages ?? 0);
+      triggerCampaignResume(req.params.id, startFromIndex).catch(err => {
+        logError('campaignRoutes.resumeCampaignEngine', { campaignId: req.params.id }, err);
+      });
+
       res.json(updated);
     } catch (error: any) {
       logError('campaignRoutes.resumeCampaign', { campaignId: req.params.id }, error);
